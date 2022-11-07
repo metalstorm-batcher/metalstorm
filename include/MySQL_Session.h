@@ -7,6 +7,7 @@
 #include "proxysql.h"
 #include "cpp.h"
 #include "MySQL_Variables.h"
+#include "Metalstorm_Batcher.h"
 
 #include "../deps/json/json.hpp"
 using json = nlohmann::json;
@@ -206,6 +207,8 @@ class MySQL_Session
 	void operator delete(void *);
 
 	Query_Info CurrentQuery;
+	Batcher_Info *batcher_info;
+
 	PtrSize_t mirrorPkt;
 
 	// uint64_t

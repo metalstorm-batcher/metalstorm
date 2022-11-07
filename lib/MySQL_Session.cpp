@@ -549,6 +549,9 @@ MySQL_Session::MySQL_Session() {
 	CurrentQuery.stmt_global_id=0;
 	CurrentQuery.stmt_info=NULL;
 
+
+	batcher_info=NULL;
+
 	current_hostgroup=-1;
 	default_hostgroup=-1;
 	locked_on_hostgroup=-1;
@@ -679,6 +682,10 @@ MySQL_Session::~MySQL_Session() {
 	if (proxysql_node_address) {
 		delete proxysql_node_address;
 		proxysql_node_address = NULL;
+	}
+	if (batcher_info) {
+		delete batcher_info;
+		batcher_info = NULL;
 	}
 }
 
