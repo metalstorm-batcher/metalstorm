@@ -35,7 +35,7 @@ EXTRALINK=#-pg
 ALL_DEBUG=-ggdb -DDEBUG
 NO_DEBUG=
 DEBUG=${ALL_DEBUG}
-#export DEBUG
+export DEBUG
 #export OPTZ
 #export EXTRALINK
 export MAKE
