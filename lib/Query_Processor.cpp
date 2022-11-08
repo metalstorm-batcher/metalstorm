@@ -2286,6 +2286,10 @@ __remove_paranthesis:
 				ret=MYSQL_COM_QUERY_GRANT;
 				break;
 			}
+			if (!strcasecmp("GATHER",token)) { // GATHER
+				ret=MYSQL_COM_QUERY_GATHER;
+				break;
+			}
 			break;
 		case 'i':
 		case 'I':
@@ -2313,6 +2317,10 @@ __remove_paranthesis:
 			}
 			if (!strcasecmp("LOAD",token)) { // LOAD
 				ret=MYSQL_COM_QUERY_LOAD;
+				break;
+			}
+			if (!strcasecmp("LATER",token)) { // LATER
+				ret=MYSQL_COM_QUERY_LATER;
 				break;
 			}
 			break;
@@ -2459,6 +2467,8 @@ __exit__query_parser_command_type:
 		free(qp->query_prefix);
 		qp->query_prefix=NULL;
 	}
+	proxy_debug(PROXY_DEBUG_METALSTORM, 0,
+		"type parsed: %s", commands_counters_desc[ret]);
 	return ret;
 }
 
