@@ -5,7 +5,7 @@
 
 class Batcher_Info {
 private:
-	deque<Query_Info> query_que;
+	std::deque<Query_Info> query_que;
 public:
 	Batcher_Info ();
 	~Batcher_Info ();
@@ -17,7 +17,7 @@ private:
 public:
 	Batcher ();
 	~Batcher ();
-	add_query (const Query_Info &query);
+	void add_query (const Query_Info &query);
 };
 
 #endif /* __CLASS_METALSTORM_BATCHER */
