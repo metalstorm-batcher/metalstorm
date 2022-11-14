@@ -237,6 +237,7 @@ enum session_status {
 	SETTING_MULTIPLE_VARIABLES,
 	SETTING_SET_NAMES,
 	SHOW_WARNINGS,
+	PROCESSING_QUERY_LATER,
 	session_status___NONE // special marker
 };
 

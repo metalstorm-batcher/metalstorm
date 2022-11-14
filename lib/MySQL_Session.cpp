@@ -549,7 +549,6 @@ MySQL_Session::MySQL_Session() {
 	CurrentQuery.stmt_global_id=0;
 	CurrentQuery.stmt_info=NULL;
 
-
 	batcher_info=NULL;
 
 	current_hostgroup=-1;
@@ -564,6 +563,9 @@ MySQL_Session::MySQL_Session() {
 	with_gtid = false;
 	use_ssl = false;
 	change_user_auth_switch = false;
+	//TODO WJF turn this to false
+	autolater=true;
+	in_later_mode=false;
 
 	//gtid_trxid = 0;
 	gtid_hid = -1;
@@ -4597,6 +4599,7 @@ handler_again:
 		case PROCESSING_STMT_EXECUTE:
 		case PROCESSING_QUERY:
 			//fprintf(stderr,"PROCESSING_QUERY\n");
+			proxy_debug(PROXY_DEBUG_METALSTORM, 0, "PROCESSING_QUERY");
 			if (pause_until > thread->curtime) {
 				handler_ret = 0;
 				return handler_ret;
@@ -4937,6 +4940,11 @@ handler_again:
 			}
 			break;
 
+		case PROCESSING_QUERY_LATER:
+			batch_info->query_queue.push_back(CurrentQuery)
+			
+
+			break;
 		case SETTING_ISOLATION_LEVEL:
 		case SETTING_TRANSACTION_READ:
 		case SETTING_CHARSET:

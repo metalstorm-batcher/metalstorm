@@ -5,8 +5,7 @@
 
 class Batcher_Info {
 private:
-	int foobar;
-	deque<int> query_que;
+	deque<Query_Info> query_que;
 public:
 	Batcher_Info ();
 	~Batcher_Info ();
@@ -18,6 +17,7 @@ private:
 public:
 	Batcher ();
 	~Batcher ();
+	add_query (const Query_Info &query);
 };
 
 #endif /* __CLASS_METALSTORM_BATCHER */
