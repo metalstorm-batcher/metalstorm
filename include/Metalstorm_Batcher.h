@@ -5,7 +5,7 @@
 
 class Batcher_Info {
 private:
-	std::deque<Query_Info> query_que;
+	std::deque<Query_Info> query_queue;
 public:
 	Batcher_Info ();
 	~Batcher_Info ();

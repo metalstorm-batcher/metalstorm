@@ -207,7 +207,7 @@ class MySQL_Session
 	void operator delete(void *);
 
 	Query_Info CurrentQuery;
-	Batcher_Info *batcher_info;
+	Batcher_Info batcher_info;
 
 	PtrSize_t mirrorPkt;
 

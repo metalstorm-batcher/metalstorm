@@ -549,8 +549,6 @@ MySQL_Session::MySQL_Session() {
 	CurrentQuery.stmt_global_id=0;
 	CurrentQuery.stmt_info=NULL;
 
-	batcher_info=NULL;
-
 	current_hostgroup=-1;
 	default_hostgroup=-1;
 	locked_on_hostgroup=-1;
@@ -684,10 +682,6 @@ MySQL_Session::~MySQL_Session() {
 	if (proxysql_node_address) {
 		delete proxysql_node_address;
 		proxysql_node_address = NULL;
-	}
-	if (batcher_info) {
-		delete batcher_info;
-		batcher_info = NULL;
 	}
 }
 
@@ -4425,13 +4419,16 @@ int MySQL_Session::RunQuery(MySQL_Data_Stream *myds, MySQL_Connection *myconn) {
 	int rc = 0;
 	switch (status) {
 		case PROCESSING_QUERY:
+			proxy_debug(PROXY_DEBUG_METALSTORM, 0, "RunQuery-PROCESSING_QUERY: %s", myds->mysql_real_query.QueryPtr);
 			rc=myconn->async_query(myds->revents, myds->mysql_real_query.QueryPtr,myds->mysql_real_query.QuerySize);
 			break;
 		case PROCESSING_STMT_PREPARE:
+			proxy_debug(PROXY_DEBUG_METALSTORM, 0, "RunQuery-PROCESSING_STMT_PREPARE: %s", (char *)CurrentQuery.QueryPointer);
 			rc=myconn->async_query(myds->revents, (char *)CurrentQuery.QueryPointer,CurrentQuery.QueryLength,&CurrentQuery.mysql_stmt);
 			break;
 		case PROCESSING_STMT_EXECUTE:
 			PROXY_TRACE2();
+			proxy_debug(PROXY_DEBUG_METALSTORM, 0, "RunQuery-PROCESSING_STMT_EXECUTE: %s", (char *)CurrentQuery.QueryPointer);
 			rc=myconn->async_query(myds->revents, (char *)CurrentQuery.QueryPointer,CurrentQuery.QueryLength,&CurrentQuery.mysql_stmt, CurrentQuery.stmt_meta);
 			break;
 		default:
@@ -4941,7 +4938,7 @@ handler_again:
 			break;
 
 		case PROCESSING_QUERY_LATER:
-			batch_info->query_queue.push_back(CurrentQuery)
+			batcher_info.add_query(CurrentQuery)
 			
 
 			break;
