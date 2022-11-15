@@ -58,7 +58,6 @@
 #include "proxysql_structs.h"
 #include "proxysql_debug.h"
 #include "proxysql_macros.h"
-#include "Metalstorm_Batcher.h"
 
 #include "jemalloc.h"
 

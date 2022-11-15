@@ -28,6 +28,7 @@
 //#include "ProxySQL_Cluster.hpp" // cluster
 //#include "ProxySQL_Statistics.hpp" // statistics
 //#include "ProxySQL_HTTP_Server.hpp" // HTTP server
+#include "Metalstorm_Batcher.h"
 #undef swap
 #undef min
 #undef max

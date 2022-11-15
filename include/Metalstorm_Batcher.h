@@ -3,6 +3,9 @@
 
 #include <deque>
 
+#include "proxysql.h"
+#include "cpp.h"
+
 class Batcher_Info {
 private:
 	std::deque<Query_Info> query_queue;
