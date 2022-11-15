@@ -4938,7 +4938,7 @@ handler_again:
 			break;
 
 		case PROCESSING_QUERY_LATER:
-			batcher_info.add_query(CurrentQuery)
+			batcher_info.add_query(CurrentQuery);
 			
 
 			break;

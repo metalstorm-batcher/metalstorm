@@ -9,6 +9,7 @@ private:
 public:
 	Batcher_Info ();
 	~Batcher_Info ();
+	void add_query (const Query_Info &query);
 };
 
 class Batcher {
@@ -17,7 +18,6 @@ private:
 public:
 	Batcher ();
 	~Batcher ();
-	void add_query (const Query_Info &query);
 };
 
 #endif /* __CLASS_METALSTORM_BATCHER */
