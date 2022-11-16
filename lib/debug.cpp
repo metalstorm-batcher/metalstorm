@@ -118,7 +118,8 @@ void proxy_debug_func(enum debug_module module, int verbosity, int thr, const ch
 	char debugbuff[DEBUG_MSG_MAXSIZE];
 	char longdebugbuff[DEBUG_MSG_MAXSIZE*8];
 	longdebugbuff[0]=0;
-	if (GloVars.global.foreground) {
+	// if (GloVars.global.foreground) {
+	if (1) {
 		va_list ap;
 		va_start(ap, fmt);
 		vsnprintf(debugbuff, DEBUG_MSG_MAXSIZE,fmt,ap);
