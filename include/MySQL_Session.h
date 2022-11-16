@@ -125,6 +125,13 @@ class MySQL_Session
 
 	void return_proxysql_internal(PtrSize_t *);
 	bool handler_special_queries(PtrSize_t *);
+
+	void return_proxysql_later(PtrSize_t *);
+	void return_proxysql_gather(PtrSize_t *);
+	void return_proxysql_in_later_mode(PtrSize_t *);
+	void return_proxysql_multi_statements(PtrSize_t *);
+	bool handler_metalstorm_queries(PtrSize_t *);
+
 	bool handler_CommitRollback(PtrSize_t *);
 	bool handler_SetAutocommit(PtrSize_t *);
 	/**

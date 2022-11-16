@@ -1257,6 +1257,126 @@ void MySQL_Session::return_proxysql_internal(PtrSize_t *pkt) {
 	l_free(pkt->size,pkt->ptr);
 }
 
+void MySQL_Session::return_proxysql_later(PtrSize_t *pkt) {
+	proxy_debug(PROXY_DEBUG_METALSTORM, 5, "get packet:%s", pkt->ptr+5);
+
+	if (this->in_later_mode) {
+	  client_myds->DSS=STATE_QUERY_SENT_NET;
+		client_myds->myprot.generate_pkt_ERR(true,NULL,NULL,1,1064,(char *)"42000",
+			(char *)"Already in later mode, Do not do this again!",true);
+	}
+	else {
+		this->in_later_mode = true;
+		client_myds->DSS=STATE_QUERY_SENT_NET;
+		// TODO WJF : send an OK
+		client_myds->myprot.generate_pkt_ERR(true,NULL,NULL,1,1064,(char *)"42000",
+			(char *)"DEBUG: LATER send OK!",true);
+	}
+
+	status=WAITING_CLIENT_DATA;
+
+	if (mirror==false) {
+		RequestEnd(NULL);
+	}
+
+	l_free(pkt->size,pkt->ptr);
+}
+
+void MySQL_Session::return_proxysql_gather(PtrSize_t *pkt){
+	proxy_debug(PROXY_DEBUG_METALSTORM, 5, "get packet:%s", pkt->ptr+5);
+
+	if (this->in_later_mode) {
+		this->in_later_mode = false;
+	  client_myds->DSS=STATE_QUERY_SENT_NET;
+		// TODO WJF : send all result
+		client_myds->myprot.generate_pkt_ERR(true,NULL,NULL,1,1064,(char *)"42000",
+			(char *)"DEBUG: GATHER send all result!",true);
+	}
+	else {
+		client_myds->DSS=STATE_QUERY_SENT_NET;
+		client_myds->myprot.generate_pkt_ERR(true,NULL,NULL,1,1064,(char *)"42000",
+			(char *)"Can not use GATHER because Not in later mode!",true);
+	}
+
+	status=WAITING_CLIENT_DATA;
+
+	if (mirror==false) {
+		RequestEnd(NULL);
+	}
+
+	l_free(pkt->size,pkt->ptr);
+}
+
+void MySQL_Session::return_proxysql_in_later_mode(PtrSize_t *pkt){
+	assert(this->in_later_mode);
+	proxy_debug(PROXY_DEBUG_METALSTORM, 5, "get packet:%s", pkt->ptr+5);
+
+	// TODO WJF : add pkt to queue
+
+	client_myds->DSS=STATE_QUERY_SENT_NET;
+	// TODO WJF send OK
+	client_myds->myprot.generate_pkt_ERR(true,NULL,NULL,1,1064,(char *)"42000",
+		(char *)"DEBUG: in later mode: send OK",true);
+
+	status=WAITING_CLIENT_DATA;
+
+	if (mirror==false) {
+		RequestEnd(NULL);
+	}
+
+	l_free(pkt->size,pkt->ptr);
+}
+
+void MySQL_Session::return_proxysql_multi_statements(PtrSize_t *pkt){
+	assert(!this->in_later_mode);
+	proxy_debug(PROXY_DEBUG_METALSTORM, 5, "get packet:%s", pkt->ptr+5);
+
+	// TODO WJF : add all pkt to queue
+
+	client_myds->DSS=STATE_QUERY_SENT_NET;
+	// TODO WJF send all result
+	client_myds->myprot.generate_pkt_ERR(true,NULL,NULL,1,1064,(char *)"42000",
+		(char *)"DEBUG: multi statement: send all result",true);
+
+	status=WAITING_CLIENT_DATA;
+
+	if (mirror==false) {
+		RequestEnd(NULL);
+	}
+
+	l_free(pkt->size,pkt->ptr);
+}
+
+bool MySQL_Session::handler_metalstorm_queries(PtrSize_t *pkt) {
+	// If get LATER
+	if (CurrentQuery.MyComQueryCmd == MYSQL_COM_QUERY_LATER) {
+		return_proxysql_later(pkt);
+		return true;
+	}
+
+	// If get GATHER
+	if (CurrentQuery.MyComQueryCmd == MYSQL_COM_QUERY_GATHER) {
+		return_proxysql_gather(pkt);
+		return true;
+	}
+
+	// If in later mode
+	if (this->in_later_mode) {
+		return_proxysql_in_later_mode(pkt);
+		return true;
+	}
+
+	// MULTI-STATEMENTS
+	char *dig=CurrentQuery.QueryParserArgs.digest_text;
+	if (index(dig,';') && (index(dig,';') != dig + strlen(dig)-1)) {
+		return_proxysql_multi_statements(pkt);
+		return true;
+	}
+
+	return false;
+}
+	
+
 bool MySQL_Session::handler_special_queries(PtrSize_t *pkt) {
 	bool deprecate_eof_active = client_myds->myconn->options.client_flag & CLIENT_DEPRECATE_EOF;
 
@@ -1264,6 +1384,7 @@ bool MySQL_Session::handler_special_queries(PtrSize_t *pkt) {
 		return_proxysql_internal(pkt);
 		return true;
 	}
+
 	if (locked_on_hostgroup == -1) {
 		if (handler_SetAutocommit(pkt) == true) {
 			return true;
@@ -3748,7 +3869,18 @@ __get_pkts_from_client:
 										// Note: CurrentQuery sees the query as sent by the client.
 										// shortly after, the packets it used to contain the query will be deallocated
 										CurrentQuery.begin((unsigned char *)pkt.ptr,pkt.size,true);
+
+										rc_back=handler_metalstorm_queries(&pkt);
+										if (rc_break==true) {
+											if (mirror==false) {
+												break;
+											} else {
+												handler_ret = -1;
+												return handler_ret;
+											}
+										}
 									}
+
 									rc_break=handler_special_queries(&pkt);
 									if (rc_break==true) {
 										if (mirror==false) {
@@ -4596,7 +4728,7 @@ handler_again:
 		case PROCESSING_STMT_EXECUTE:
 		case PROCESSING_QUERY:
 			//fprintf(stderr,"PROCESSING_QUERY\n");
-			proxy_debug(PROXY_DEBUG_METALSTORM, 5, "PROCESSING_QUERY\n");
+			proxy_debug(PROXY_DEBUG_METALSTORM, 5, "handler-PROCESSING_QUERY\n");
 			if (pause_until > thread->curtime) {
 				handler_ret = 0;
 				return handler_ret;
