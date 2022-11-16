@@ -4419,16 +4419,16 @@ int MySQL_Session::RunQuery(MySQL_Data_Stream *myds, MySQL_Connection *myconn) {
 	int rc = 0;
 	switch (status) {
 		case PROCESSING_QUERY:
-			proxy_debug(PROXY_DEBUG_METALSTORM, 0, "RunQuery-PROCESSING_QUERY: %s", myds->mysql_real_query.QueryPtr);
+			proxy_debug(PROXY_DEBUG_METALSTORM, 5, "RunQuery-PROCESSING_QUERY: %s\n", myds->mysql_real_query.QueryPtr);
 			rc=myconn->async_query(myds->revents, myds->mysql_real_query.QueryPtr,myds->mysql_real_query.QuerySize);
 			break;
 		case PROCESSING_STMT_PREPARE:
-			proxy_debug(PROXY_DEBUG_METALSTORM, 0, "RunQuery-PROCESSING_STMT_PREPARE: %s", (char *)CurrentQuery.QueryPointer);
+			proxy_debug(PROXY_DEBUG_METALSTORM, 5, "RunQuery-PROCESSING_STMT_PREPARE: %s\n", (char *)CurrentQuery.QueryPointer);
 			rc=myconn->async_query(myds->revents, (char *)CurrentQuery.QueryPointer,CurrentQuery.QueryLength,&CurrentQuery.mysql_stmt);
 			break;
 		case PROCESSING_STMT_EXECUTE:
 			PROXY_TRACE2();
-			proxy_debug(PROXY_DEBUG_METALSTORM, 0, "RunQuery-PROCESSING_STMT_EXECUTE: %s", (char *)CurrentQuery.QueryPointer);
+			proxy_debug(PROXY_DEBUG_METALSTORM, 5, "RunQuery-PROCESSING_STMT_EXECUTE: %s\n", (char *)CurrentQuery.QueryPointer);
 			rc=myconn->async_query(myds->revents, (char *)CurrentQuery.QueryPointer,CurrentQuery.QueryLength,&CurrentQuery.mysql_stmt, CurrentQuery.stmt_meta);
 			break;
 		default:
@@ -4596,7 +4596,7 @@ handler_again:
 		case PROCESSING_STMT_EXECUTE:
 		case PROCESSING_QUERY:
 			//fprintf(stderr,"PROCESSING_QUERY\n");
-			proxy_debug(PROXY_DEBUG_METALSTORM, 0, "PROCESSING_QUERY");
+			proxy_debug(PROXY_DEBUG_METALSTORM, 5, "PROCESSING_QUERY\n");
 			if (pause_until > thread->curtime) {
 				handler_ret = 0;
 				return handler_ret;

@@ -2467,8 +2467,8 @@ __exit__query_parser_command_type:
 		free(qp->query_prefix);
 		qp->query_prefix=NULL;
 	}
-	proxy_debug(PROXY_DEBUG_METALSTORM, 0,
-		"type parsed: %s", commands_counters_desc[ret]);
+	proxy_debug(PROXY_DEBUG_METALSTORM, 5,
+		"type parsed: %s\n", commands_counters_desc[ret]);
 	return ret;
 }
 
