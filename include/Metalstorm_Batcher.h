@@ -12,7 +12,7 @@ private:
 public:
 	Batcher_Info ();
 	~Batcher_Info ();
-	void add_query (const Query_Info &query);
+	void add_query (PtrSize_t *pkt);
 };
 
 class Batcher {
