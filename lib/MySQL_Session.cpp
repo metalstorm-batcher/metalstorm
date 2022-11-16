@@ -3870,7 +3870,7 @@ __get_pkts_from_client:
 										// shortly after, the packets it used to contain the query will be deallocated
 										CurrentQuery.begin((unsigned char *)pkt.ptr,pkt.size,true);
 
-										rc_back=handler_metalstorm_queries(&pkt);
+										rc_break=handler_metalstorm_queries(&pkt);
 										if (rc_break==true) {
 											if (mirror==false) {
 												break;
