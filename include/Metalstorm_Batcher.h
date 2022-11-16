@@ -13,6 +13,7 @@ public:
 	Batcher_Info ();
 	~Batcher_Info ();
 	void add_query (PtrSize_t *pkt);
+  void judge_process_kind(Query_Info *query_info);
 };
 
 class Batcher {
