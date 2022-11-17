@@ -12,9 +12,9 @@ Query_Pack::~Query_Pack () {
 		query = NULL;
 	}
 
-	if (pkt) {
-		delete pkt;
-		pkt = NULL;
+	if (pkt.ptr) {
+		l_free(pkt.size,pkt.ptr);
+		pkt.ptr = NULL;
 	}
 }
 
@@ -38,8 +38,8 @@ void Batcher_Info::add_query (PtrSize_t *pkt) {
 
 	// copy packet
 	pack->pkt.ptr = l_alloc(pkt->size);
-	pack->pkt.size = pkt.size;
-	memcpy(copy_ptr, pkt->ptr, pkt->size);
+	pack->pkt.size = pkt->size;
+	memcpy(pack->pkt.ptr, pkt->ptr, pkt->size);
 
 	// generate query info
 	pack->query = new Query_Info();
