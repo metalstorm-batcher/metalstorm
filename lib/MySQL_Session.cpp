@@ -1350,8 +1350,8 @@ bool MySQL_Session::return_proxysql_multi_statements(PtrSize_t *pkt){
 	return false;
 	// client_myds->myprot.generate_pkt_ERR(true,NULL,NULL,1,1064,(char *)"42000",
 	// 	(char *)"DEBUG: multi statement: send all result",true);
+	// status=WAITING_CLIENT_DATA;
 
-	status=WAITING_CLIENT_DATA;
 
 	if (mirror==false) {
 		RequestEnd(NULL);
