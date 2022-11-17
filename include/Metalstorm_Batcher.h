@@ -2,13 +2,19 @@
 #define __CLASS_METALSTORM_BATCHER
 
 #include <deque>
+#include <mutex>
 
 #include "proxysql.h"
 #include "cpp.h"
 
+struct Query_Pack {
+	Query_Info query;
+	int is_tp_or_ap;
+}
 class Batcher_Info {
 private:
-	std::deque<Query_Info> query_queue;
+	std::mutex queue_mutex;
+	std::deque<Query_Pack> query_queue;
 public:
 	Batcher_Info ();
 	~Batcher_Info ();
