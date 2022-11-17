@@ -549,6 +549,8 @@ MySQL_Session::MySQL_Session() {
 	CurrentQuery.stmt_global_id=0;
 	CurrentQuery.stmt_info=NULL;
 
+	batcher_info = new Batcher_Info();
+
 	current_hostgroup=-1;
 	default_hostgroup=-1;
 	locked_on_hostgroup=-1;
@@ -562,7 +564,6 @@ MySQL_Session::MySQL_Session() {
 	use_ssl = false;
 	change_user_auth_switch = false;
 	//TODO WJF turn this to false
-	autolater=true;
 	in_later_mode=false;
 
 	//gtid_trxid = 0;
@@ -682,6 +683,10 @@ MySQL_Session::~MySQL_Session() {
 	if (proxysql_node_address) {
 		delete proxysql_node_address;
 		proxysql_node_address = NULL;
+	}
+	if (batcher_info) {
+		delete batcher_info;
+		batcher_info = NULL;
 	}
 }
 
@@ -5069,11 +5074,6 @@ handler_again:
 			}
 			break;
 
-		case PROCESSING_QUERY_LATER:
-			batcher_info.add_query(&pkt);
-			
-
-			break;
 		case SETTING_ISOLATION_LEVEL:
 		case SETTING_TRANSACTION_READ:
 		case SETTING_CHARSET:

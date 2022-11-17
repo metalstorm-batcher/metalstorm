@@ -515,6 +515,10 @@ class Query_Processor_Output;
 class MySrvC;
 class Web_Interface_plugin;
 class ProxySQL_Node_Address;
+// MetalStorm class
+class Query_Pack;
+class Batcher_Info;
+class Batcher;
 #endif /* PROXYSQL_CLASSES */
 //#endif /* __cplusplus */
 

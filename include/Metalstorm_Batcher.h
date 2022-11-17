@@ -7,9 +7,12 @@
 #include "proxysql.h"
 #include "cpp.h"
 
-struct Query_Pack {
+class Query_Pack {
+public:
 	Query_Info *query;
 	int is_tp_or_ap;
+	Query_Pack();
+	~Query_Pack();
 };
 
 class Batcher_Info {
@@ -19,8 +22,8 @@ private:
 public:
 	Batcher_Info ();
 	~Batcher_Info ();
-	void add_query (PtrSize_t *pkt);
-  void judge_process_kind(Query_Pack* query_pack);
+	void add_query (PtrSize_t *);
+	void judge_process_kind(Query_Pack *);
 };
 
 class Batcher {
