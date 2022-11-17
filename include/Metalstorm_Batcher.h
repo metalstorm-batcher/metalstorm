@@ -9,9 +9,13 @@
 
 class Query_Pack {
 public:
-	Query_Info *query;
+	Query_Info *query_info;
 	PtrSize_t pkt;
+	MySQL_ResultSet *result_set;
+
 	int is_tp_or_ap;
+	bool finished;
+
 	Query_Pack();
 	Query_Pack(const Query_Pack &&);
 	~Query_Pack();
