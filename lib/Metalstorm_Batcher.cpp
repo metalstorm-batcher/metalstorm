@@ -18,12 +18,12 @@ Query_Pack::~Query_Pack () {
 	}
 }
 
-Query_Pack::Query_Pack(const Query_Pack && A) {
-	proxy_debug(PROXY_DEBUG_METALSTORM, 5, "Query_Pack move construct!\n");
-	query = A.query;
-	pkt = A.pkt;
-	is_tp_or_ap = A.is_tp_or_ap;
-}
+// Query_Pack::Query_Pack(const Query_Pack && A) {
+// 	proxy_debug(PROXY_DEBUG_METALSTORM, 5, "Query_Pack move construct!\n");
+// 	query = A.query;
+// 	pkt = A.pkt;
+// 	is_tp_or_ap = A.is_tp_or_ap;
+// }
 
 Batcher_Info::Batcher_Info () {
 	proxy_debug(PROXY_DEBUG_METALSTORM, 5, "Batcher Info construct!\n");
@@ -34,12 +34,14 @@ Batcher_Info::~Batcher_Info () {
 }
 
 void Batcher_Info::add_query (PtrSize_t *pkt) {
+	proxy_debug(PROXY_DEBUG_METALSTORM, 5, "add_query using pkt:%s\n", pkt->ptr);
 	Query_Pack *pack = new Query_Pack();
 
 	// copy packet
 	pack->pkt.ptr = l_alloc(pkt->size);
 	pack->pkt.size = pkt->size;
 	memcpy(pack->pkt.ptr, pkt->ptr, pkt->size);
+	proxy_debug(PROXY_DEBUG_METALSTORM, 5, "copyed pkt:%s\n", pack->pkt.ptr);
 
 	// generate query info
 	pack->query = new Query_Info();
