@@ -34,18 +34,18 @@ Batcher_Info::~Batcher_Info () {
 }
 
 void Batcher_Info::add_query (PtrSize_t *pkt) {
-	proxy_debug(PROXY_DEBUG_METALSTORM, 5, "add_query using pkt:%s\n", pkt->ptr);
+	proxy_debug(PROXY_DEBUG_METALSTORM, 5, "add_query using pkt:%s\n", pkt->ptr + 5);
 	Query_Pack *pack = new Query_Pack();
 
 	// copy packet
 	pack->pkt.ptr = l_alloc(pkt->size);
 	pack->pkt.size = pkt->size;
 	memcpy(pack->pkt.ptr, pkt->ptr, pkt->size);
-	proxy_debug(PROXY_DEBUG_METALSTORM, 5, "copyed pkt:%s\n", pack->pkt.ptr);
+	proxy_debug(PROXY_DEBUG_METALSTORM, 5, "copyed pkt:%s\n", pack->pkt.ptr + 5);
 
 	// generate query info
 	pack->query = new Query_Info();
-	pack->query->begin((unsigned char *)pack->pkt.ptr, pkt->size, true);
+	// pack->query->begin((unsigned char *)pack->pkt.ptr, pkt->size, true);
 
 	// judge is tp or ap of this query_info
 	judge_process_kind(pack);
