@@ -63,9 +63,6 @@ class Query_Info {
 	uint64_t rows_sent;
 	uint64_t waiting_since;
 
-  // 0 is ap, 1 is tp;
-  int is_tp_or_ap;
-
 	Query_Info();
 	~Query_Info();
 	void init(unsigned char *_p, int len, bool mysql_header=false);

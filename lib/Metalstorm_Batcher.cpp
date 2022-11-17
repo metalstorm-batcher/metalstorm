@@ -10,11 +10,10 @@ Batcher_Info::~Batcher_Info () {
 }
 
 void Batcher_Info::add_query (PtrSize_t *pkt) {
-	
-	
   // get query info from pkt
   Query_Pack query_pack;
-	query_pack.query.begin((unsigned char *)pkt->ptr, pkt->size, true);
+  query_pack.query = new Query_Info();
+	query_pack.query->begin((unsigned char *)pkt->ptr, pkt->size, true);
   
   // judge is tp or ap of this query_info
   judge_process_kind(&query_pack);
