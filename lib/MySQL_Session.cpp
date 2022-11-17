@@ -563,7 +563,6 @@ MySQL_Session::MySQL_Session() {
 	with_gtid = false;
 	use_ssl = false;
 	change_user_auth_switch = false;
-	//TODO WJF turn this to false
 	in_later_mode=false;
 
 	//gtid_trxid = 0;
@@ -1273,9 +1272,13 @@ void MySQL_Session::return_proxysql_later(PtrSize_t *pkt) {
 	else {
 		this->in_later_mode = true;
 		client_myds->DSS=STATE_QUERY_SENT_NET;
-		// TODO WJF : send an OK
-		client_myds->myprot.generate_pkt_ERR(true,NULL,NULL,1,1064,(char *)"42000",
-			(char *)"DEBUG: LATER send OK!",true);
+		unsigned int nTrx=NumActiveTransactions();
+		uint16_t setStatus = (nTrx ? SERVER_STATUS_IN_TRANS : 0 );
+		if (autocommit) setStatus |= SERVER_STATUS_AUTOCOMMIT;
+		client_myds->myprot.generate_pkt_OK(true,NULL,NULL,1,0,0,setStatus,0,NULL);
+		client_myds->DSS=STATE_SLEEP;
+		// client_myds->myprot.generate_pkt_ERR(true,NULL,NULL,1,1064,(char *)"42000",
+		// 	(char *)"DEBUG: LATER send OK!",true);
 	}
 
 	status=WAITING_CLIENT_DATA;
@@ -1292,15 +1295,18 @@ void MySQL_Session::return_proxysql_gather(PtrSize_t *pkt){
 
 	if (this->in_later_mode) {
 		this->in_later_mode = false;
-	  client_myds->DSS=STATE_QUERY_SENT_NET;
 		// TODO WJF : send all result
+
+		client_myds->DSS=STATE_QUERY_SENT_NET;
 		client_myds->myprot.generate_pkt_ERR(true,NULL,NULL,1,1064,(char *)"42000",
 			(char *)"DEBUG: GATHER send all result!",true);
+		client_myds->DSS=STATE_SLEEP;
 	}
 	else {
 		client_myds->DSS=STATE_QUERY_SENT_NET;
 		client_myds->myprot.generate_pkt_ERR(true,NULL,NULL,1,1064,(char *)"42000",
 			(char *)"Can not use GATHER because Not in later mode!",true);
+		client_myds->DSS=STATE_SLEEP;
 	}
 
 	status=WAITING_CLIENT_DATA;
@@ -1316,12 +1322,14 @@ void MySQL_Session::return_proxysql_in_later_mode(PtrSize_t *pkt){
 	assert(this->in_later_mode);
 	proxy_debug(PROXY_DEBUG_METALSTORM, 5, "get packet:%s", pkt->ptr+5);
 
-	// TODO WJF : add pkt to queue
-
 	client_myds->DSS=STATE_QUERY_SENT_NET;
-	// TODO WJF send OK
-	client_myds->myprot.generate_pkt_ERR(true,NULL,NULL,1,1064,(char *)"42000",
-		(char *)"DEBUG: in later mode: send OK",true);
+	unsigned int nTrx=NumActiveTransactions();
+	uint16_t setStatus = (nTrx ? SERVER_STATUS_IN_TRANS : 0 );
+	if (autocommit) setStatus |= SERVER_STATUS_AUTOCOMMIT;
+	client_myds->myprot.generate_pkt_OK(true,NULL,NULL,1,0,0,setStatus,0,NULL);
+	client_myds->DSS=STATE_SLEEP;
+	// client_myds->myprot.generate_pkt_ERR(true,NULL,NULL,1,1064,(char *)"42000",
+	// 	(char *)"DEBUG: in later mode: send OK",true);
 
 	status=WAITING_CLIENT_DATA;
 
@@ -1332,16 +1340,16 @@ void MySQL_Session::return_proxysql_in_later_mode(PtrSize_t *pkt){
 	l_free(pkt->size,pkt->ptr);
 }
 
-void MySQL_Session::return_proxysql_multi_statements(PtrSize_t *pkt){
+bool MySQL_Session::return_proxysql_multi_statements(PtrSize_t *pkt){
 	assert(!this->in_later_mode);
 	proxy_debug(PROXY_DEBUG_METALSTORM, 5, "get packet:%s", pkt->ptr+5);
 
-	// TODO WJF : add all pkt to queue
+	batcher_info->add_query(pkt);
 
-	client_myds->DSS=STATE_QUERY_SENT_NET;
 	// TODO WJF send all result
-	client_myds->myprot.generate_pkt_ERR(true,NULL,NULL,1,1064,(char *)"42000",
-		(char *)"DEBUG: multi statement: send all result",true);
+	return false;
+	// client_myds->myprot.generate_pkt_ERR(true,NULL,NULL,1,1064,(char *)"42000",
+	// 	(char *)"DEBUG: multi statement: send all result",true);
 
 	status=WAITING_CLIENT_DATA;
 
@@ -1350,6 +1358,7 @@ void MySQL_Session::return_proxysql_multi_statements(PtrSize_t *pkt){
 	}
 
 	l_free(pkt->size,pkt->ptr);
+	return true;
 }
 
 bool MySQL_Session::handler_metalstorm_queries(PtrSize_t *pkt) {
@@ -1374,8 +1383,9 @@ bool MySQL_Session::handler_metalstorm_queries(PtrSize_t *pkt) {
 	// MULTI-STATEMENTS
 	char *dig=CurrentQuery.QueryParserArgs.digest_text;
 	if (index(dig,';') && (index(dig,';') != dig + strlen(dig)-1)) {
-		return_proxysql_multi_statements(pkt);
-		return true;
+		// TODO WJF jreturn result in fuction
+		return return_proxysql_multi_statements(pkt);
+		// return true;
 	}
 
 	return false;
