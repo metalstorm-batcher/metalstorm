@@ -13,6 +13,9 @@ public:
 	PtrSize_t pkt;
 	MySQL_ResultSet *result_set;
 
+	// because we put query with dependencies in one DB server, so we can only
+	// record lastest one query with dependencies. 
+  Query_Pack* dependence_query_pack;
 	int is_tp_or_ap;
 	bool finished;
 

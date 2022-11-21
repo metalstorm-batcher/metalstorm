@@ -4,7 +4,7 @@
 Query_Pack::Query_Pack () {
 	proxy_debug(PROXY_DEBUG_METALSTORM, 5, "Query_Pack construct!\n");
 	is_tp_or_ap = 0;
-	finshed = false;
+	finished = false;
 }
 
 Query_Pack::~Query_Pack () {
@@ -65,6 +65,12 @@ void Batcher_Info::add_query (PtrSize_t *pkt) {
 }
 
 void Batcher_Info::judge_process_kind(Query_Pack* query_pack) {
+
+  if (query_pack->dependence_query_pack != nullptr) {
+    query_pack->is_tp_or_ap = query_pack->dependence_query_pack->is_tp_or_ap;
+    return;
+  }
+
   // judge based query_info->stmt_info, query_info->stmt_meta
 	query_pack->is_tp_or_ap = 0;
 }
