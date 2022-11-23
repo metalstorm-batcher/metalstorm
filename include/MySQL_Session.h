@@ -232,6 +232,8 @@ class MySQL_Session
 	PtrArray *mybes;
 	MySQL_Data_Stream *client_myds;
 	MySQL_Data_Stream *server_myds;
+	PtrSizeArray *MsPSarrayOUT;
+	uint64_t rows_sent;
 	/*
 	 * @brief Store the hostgroups that hold connections that have been flagged as 'expired' by the
 	 *  maintenance thread. These values will be used to release the retained connections in the specific

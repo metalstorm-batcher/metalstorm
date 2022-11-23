@@ -1228,7 +1228,7 @@ int MySQL_Data_Stream::array2buffer() {
 					queueOUT.pkt.ptr=NULL;
 				}
 		//VALGRIND_ENABLE_ERROR_REPORTING;
-				if (myconn->get_status(STATUS_MYSQL_CONNECTION_COMPRESSION)==true) {
+				if (myconn->get_status(STATUS_MYSQL_CONNECTION_COMPRESSION)==true && 0) {
 					proxy_debug(PROXY_DEBUG_PKT_ARRAY, 5, "Session=%p . DataStream: %p -- Compression enabled\n", sess, this);
 					generate_compressed_packet();	// it is copied directly into queueOUT.pkt					
 				} else {
@@ -1290,6 +1290,8 @@ unsigned char * MySQL_Data_Stream::resultset2buffer(bool del) {
 	unsigned char *mybuff=(unsigned char *)l_alloc(resultset_length);
 	PtrSize_t *ps;
 	for (i=0;i<resultset->len;i++) {
+		proxy_debug(PROXY_DEBUG_METALSTORM, 5, "result %d, size %d\n", i, resultset->index(i)->size);
+
 		ps=resultset->index(i);
 		memcpy(mybuff+l,ps->ptr,ps->size);
 		if (del) l_free(ps->size,ps->ptr);
