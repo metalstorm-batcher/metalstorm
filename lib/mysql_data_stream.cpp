@@ -454,6 +454,8 @@ void MySQL_Data_Stream::init(enum MySQL_DS_type _type, MySQL_Session *_sess, int
 // TODO: should check the status of the data stream, and identify if it is safe to reconnect or if the session should be destroyed
 void MySQL_Data_Stream::shut_soft() {
 	proxy_debug(PROXY_DEBUG_NET, 4, "Shutdown soft fd=%d. Session=%p, DataStream=%p\n", fd, sess, this);
+	proxy_debug(PROXY_DEBUG_METALSTORM, 5, "shut_soft\n");
+
 	active=0;
 	set_net_failure();
 	//if (sess) sess->net_failure=1;
@@ -482,6 +484,8 @@ void MySQL_Data_Stream::check_data_flow() {
 	if ( (PSarrayIN->len || queue_data(queueIN) ) && ( PSarrayOUT->len || queue_data(queueOUT) ) ){
 		// there is data at both sides of the data stream: this is considered a fatal error
 		proxy_error("Session=%p, DataStream=%p -- Data at both ends of a MySQL data stream: IN <%d bytes %d packets> , OUT <%d bytes %d packets>\n", sess, this, PSarrayIN->len , queue_data(queueIN) , PSarrayOUT->len , queue_data(queueOUT));
+		
+		proxy_debug(PROXY_DEBUG_METALSTORM, 5, "shut_soft 1\n");
 		shut_soft();
 	}
 	if ((myds_type==MYDS_BACKEND) && myconn && (myconn->fd==0) && (revents & POLLOUT)) {
@@ -495,6 +499,7 @@ void MySQL_Data_Stream::check_data_flow() {
 		} else {
 			errno=error;
 			perror("check_data_flow");
+			proxy_debug(PROXY_DEBUG_METALSTORM, 5, "shut_soft 2\n");
 			shut_soft();
 		}
 	}
@@ -506,6 +511,7 @@ int MySQL_Data_Stream::read_from_net() {
 	}
 	if ((revents & POLLIN)==0) return 0;
 	if (revents & POLLHUP) {
+		proxy_debug(PROXY_DEBUG_METALSTORM, 5, "shut_soft 3\n");
 		shut_soft();
 		return -1;
 	}
@@ -570,6 +576,7 @@ int MySQL_Data_Stream::read_from_net() {
 				proxy_debug(PROXY_DEBUG_NET, 5, "Session=%p: write %d bytes into BIO %p, len=%d\n", sess, n2, rbio_ssl, len);
 				//proxy_info("BIO_write with len = %d and %d bytes\n", len , n2);
 				if (n2 <= 0) {
+					proxy_debug(PROXY_DEBUG_METALSTORM, 5, "shut_soft 4\n");
 					shut_soft();
 					return -1;
 				}
@@ -579,6 +586,7 @@ int MySQL_Data_Stream::read_from_net() {
 					//proxy_info("SSL_is_init_finished NOT completed\n");
 					if (do_ssl_handshake() == SSLSTATUS_FAIL) {
 						//proxy_info("SSL_is_init_finished failed!!\n");
+						proxy_debug(PROXY_DEBUG_METALSTORM, 5, "shut_soft 5\n");
 						shut_soft();
 						return -1;
 					}
@@ -613,12 +621,14 @@ int MySQL_Data_Stream::read_from_net() {
 					if (n2 > 0) {
           				queue_encrypted_bytes(buf2, n2);
 					} else if (!BIO_should_retry(wbio_ssl)) {
+						proxy_debug(PROXY_DEBUG_METALSTORM, 5, "shut_soft 6\n");
 						shut_soft();
 						return -1;
 					}
 				} while (n2>0);
 			}
 			if (status == SSLSTATUS_FAIL) {
+				proxy_debug(PROXY_DEBUG_METALSTORM, 5, "shut_soft 7\n");
 				shut_soft();
 				return -1;
 			}
@@ -634,15 +644,20 @@ int MySQL_Data_Stream::read_from_net() {
 	if (r < 1) {
 		if (encrypted==false) {
 			int myds_errno=errno;
-			if (r==0 || (r==-1 && myds_errno != EINTR && myds_errno != EAGAIN)) {
+			if (0 && r==0 || (r==-1 && myds_errno != EINTR && myds_errno != EAGAIN)) {
+				proxy_debug(PROXY_DEBUG_METALSTORM, 5, "shut_soft 8\n");
 				shut_soft();
 			}
 		} else {
 			int ssl_ret=SSL_get_error(ssl, r);
-			if (ssl_ret!=SSL_ERROR_WANT_READ && ssl_ret!=SSL_ERROR_WANT_WRITE) shut_soft();
+			if (ssl_ret!=SSL_ERROR_WANT_READ && ssl_ret!=SSL_ERROR_WANT_WRITE) {
+				proxy_debug(PROXY_DEBUG_METALSTORM, 5, "shut_soft 9\n");
+				shut_soft();
+			}
 			if (r==0 && revents==1) {
 				// revents returns 1 , but recv() returns 0 , so there is no data.
 				// Therefore the socket is already closed
+				proxy_debug(PROXY_DEBUG_METALSTORM, 5, "shut_soft 10\n");
 				shut_soft();
 			}
 		}
@@ -686,6 +701,7 @@ int MySQL_Data_Stream::write_to_net() {
 				}
         		else if (!BIO_should_retry(wbio_ssl)) {
 					//proxy_info("BIO_should_retry failed\n");
+					proxy_debug(PROXY_DEBUG_METALSTORM, 5, "shut_soft 11\n");
 					shut_soft();
 					return -1;
 				}
@@ -710,6 +726,7 @@ int MySQL_Data_Stream::write_to_net() {
   			} else {
 				int myds_errno=errno;
 				if (n==0 || (n==-1 && myds_errno != EINTR && myds_errno != EAGAIN)) {
+					proxy_debug(PROXY_DEBUG_METALSTORM, 5, "shut_soft 12\n");
 					shut_soft();
 					return 0;
 				} else {
@@ -732,11 +749,15 @@ int MySQL_Data_Stream::write_to_net() {
 		if (encrypted==false)	{
 			if ((poll_fds_idx < 0) || (mypolls->fds[poll_fds_idx].revents & POLLOUT)) { // in write_to_net_poll() we has remove this safety
                                                           // so we enforce it here
+				proxy_debug(PROXY_DEBUG_METALSTORM, 5, "shut_soft 13\n");
 				shut_soft();
 			}
 		} else {
 			int ssl_ret=SSL_get_error(ssl, bytes_io);
-			if (ssl_ret!=SSL_ERROR_WANT_READ && ssl_ret!=SSL_ERROR_WANT_WRITE) shut_soft();
+			if (ssl_ret!=SSL_ERROR_WANT_READ && ssl_ret!=SSL_ERROR_WANT_WRITE) {
+				proxy_debug(PROXY_DEBUG_METALSTORM, 5, "shut_soft 14\n");
+				shut_soft();
+			}
 		}
 	} else {
 		queue_r(queueOUT, bytes_io);
@@ -788,6 +809,7 @@ void MySQL_Data_Stream::set_pollout() {
 					//proxy_info("SSL_is_init_finished NOT completed\n");
 					if (do_ssl_handshake() == SSLSTATUS_FAIL) {
 						//proxy_info("SSL_is_init_finished failed!!\n");
+						proxy_debug(PROXY_DEBUG_METALSTORM, 5, "shut_soft 15\n");
 						shut_soft();
 						return;
 					}
@@ -825,6 +847,7 @@ int MySQL_Data_Stream::write_to_net_poll() {
 			//proxy_info("SSL_is_init_finished completed: NO!\n");
 					if (do_ssl_handshake() == SSLSTATUS_FAIL) {
 						//proxy_info("SSL_is_init_finished failed!!\n");
+						proxy_debug(PROXY_DEBUG_METALSTORM, 5, "shut_soft 16\n");
 						shut_soft();
 						return -1;
 					}
@@ -859,6 +882,7 @@ int MySQL_Data_Stream::write_to_net_poll() {
   			} else {
 				int myds_errno=errno;
 				if (n==0 || (n==-1 && myds_errno != EINTR && myds_errno != EAGAIN)) {
+					proxy_debug(PROXY_DEBUG_METALSTORM, 5, "shut_soft 17\n");
 					shut_soft();
 					return 0;
 				} else {
@@ -1048,6 +1072,7 @@ int MySQL_Data_Stream::buffer2array() {
 					}
 					if (sanity_check == false) {
 						proxy_error("Unable to uncompress a compressed packet\n");
+						proxy_debug(PROXY_DEBUG_METALSTORM, 5, "shut_soft 18\n");
 						shut_soft();
 						return ret;
 					}

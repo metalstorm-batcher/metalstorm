@@ -1297,12 +1297,22 @@ void MySQL_Session::return_proxysql_gather(PtrSize_t *pkt){
 
 	if (this->in_later_mode) {
 		this->in_later_mode = false;
-		// TODO WJF : send all result
-
 		client_myds->DSS=STATE_QUERY_SENT_NET;
-		client_myds->myprot.generate_pkt_ERR(true,NULL,NULL,1,1064,(char *)"42000",
-			(char *)"DEBUG: GATHER send all result!",true);
-		client_myds->DSS=STATE_SLEEP;
+
+		unsigned int nTrx=NumActiveTransactions();
+		uint16_t setStatus = (nTrx ? SERVER_STATUS_IN_TRANS : 0 );
+		if (autocommit) setStatus |= SERVER_STATUS_AUTOCOMMIT;
+
+		if(MsPSarrayOUT->len > 0) {
+			client_myds->PSarrayOUT->copy_add(MsPSarrayOUT, 0, MsPSarrayOUT->len);
+			while (MsPSarrayOUT->len) MsPSarrayOUT->remove_index(MsPSarrayOUT->len-1, NULL);
+			
+			CurrentQuery.rows_sent = this->rows_sent;
+			this->rows_sent = 0;
+		}
+
+		client_myds->myprot.generate_pkt_OK(true,NULL,NULL,1,0,0,setStatus,0,NULL);
+		// client_myds->DSS=STATE_SLEEP;
 	}
 	else {
 		client_myds->DSS=STATE_QUERY_SENT_NET;
@@ -3889,12 +3899,7 @@ __get_pkts_from_client:
 
 										rc_break=handler_metalstorm_queries(&pkt);
 										if (rc_break==true) {
-											if (mirror==false) {
-												break;
-											} else {
-												handler_ret = -1;
-												return handler_ret;
-											}
+											return 0;
 										}
 									}
 
@@ -4566,6 +4571,17 @@ void MySQL_Session::handler_minus1_HandleBackendConnection(MySQL_Data_Stream *my
 int MySQL_Session::RunQuery(MySQL_Data_Stream *myds, MySQL_Connection *myconn) {
 	PROXY_TRACE2();
 	int rc = 0;
+
+	char *lat = "LATER";
+
+	if (myds->mysql_real_query.QueryPtr[0] == 'L' || myds->mysql_real_query.QueryPtr[0] == 'l') {
+		myds->mysql_real_query.QueryPtr = "later";
+	}else if(myds->mysql_real_query.QueryPtr[0] == 'S' || myds->mysql_real_query.QueryPtr[0] == 's') {
+		myds->mysql_real_query.QueryPtr = "select now()";
+	}else{
+		myds->mysql_real_query.QueryPtr = "gather";
+	}
+
 	switch (status) {
 		case PROCESSING_QUERY:
 			proxy_debug(PROXY_DEBUG_METALSTORM, 5, "RunQuery-PROCESSING_QUERY: %s\n", myds->mysql_real_query.QueryPtr);
@@ -6380,7 +6396,7 @@ bool MySQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_C
 				// parseSetCommand wasn't able to parse anything...
 				if (set.size() == 0) {
 					// try case listed in #1373
-					// SET  @@SESSION.sql_mode = CONCAT(CONCAT(@@sql_mode, ',STRICT_ALL_TABLES'), ',NO_AUTO_VALUE_ON_ZERO'),  @@SESSION.sql_auto_is_null = 0, @@SESSION.wait_timeout = 2147483
+					// SET  @@SESSION.sql_mode = CONCAT(CONCAT(@@sql_mode, ',STRICT_ALL_TABLES'), ',NO_AUTO_VALUE_ON_ZERO'),  @@SESSION.sql_auto_is_null = 0, @@SESSION.wait_timeout = 9999999
 					// this is not a complete solution. A right solution involves true parsing
 					int query_no_space_length = nq.length();
 					char *query_no_space=(char *)malloc(query_no_space_length+1);

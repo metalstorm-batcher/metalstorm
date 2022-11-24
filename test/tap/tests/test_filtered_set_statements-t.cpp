@@ -44,8 +44,8 @@ std::vector<std::pair<std::string, std::string>> filtered_set_queries {
 	{ "group_concat_max_len", "4294967295" },
 	{ "sql_safe_updates", "true" },
 	{ "session_track_gtids", "OWN_GTID" },
-	{ "interactive_timeout", "28801" },
-	{ "net_read_timeout", "28801" },
+	{ "interactive_timeout", "9999999" },
+	{ "net_read_timeout", "9999999" },
 	// NOTE: This variable has been temporarily ignored. Check issues #3442 and #3441.
 	{ "session_track_schema", "1" },
 	// Added several variables to be set using `grave accents`. See issue #3479.
