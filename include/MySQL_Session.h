@@ -7,6 +7,7 @@
 #include "proxysql.h"
 #include "cpp.h"
 #include "MySQL_Variables.h"
+#include "Metalstorm_Batcher.h"
 
 #include "../deps/json/json.hpp"
 using json = nlohmann::json;
@@ -61,7 +62,6 @@ class Query_Info {
 	uint64_t affected_rows;
 	uint64_t rows_sent;
 	uint64_t waiting_since;
-
 	Query_Info();
 	~Query_Info();
 	void init(unsigned char *_p, int len, bool mysql_header=false);
@@ -124,6 +124,13 @@ class MySQL_Session
 
 	void return_proxysql_internal(PtrSize_t *);
 	bool handler_special_queries(PtrSize_t *);
+
+	void return_proxysql_later(PtrSize_t *);
+	void return_proxysql_gather(PtrSize_t *);
+	void return_proxysql_in_later_mode(PtrSize_t *);
+	bool return_proxysql_multi_statements(PtrSize_t *);
+	bool handler_metalstorm_queries(PtrSize_t *);
+
 	bool handler_CommitRollback(PtrSize_t *);
 	bool handler_SetAutocommit(PtrSize_t *);
 	/**
@@ -206,6 +213,8 @@ class MySQL_Session
 	void operator delete(void *);
 
 	Query_Info CurrentQuery;
+	Batcher_Info *batcher_info;
+
 	PtrSize_t mirrorPkt;
 
 	// uint64_t
@@ -223,6 +232,8 @@ class MySQL_Session
 	PtrArray *mybes;
 	MySQL_Data_Stream *client_myds;
 	MySQL_Data_Stream *server_myds;
+	PtrSizeArray *MsPSarrayOUT;
+	uint64_t rows_sent;
 	/*
 	 * @brief Store the hostgroups that hold connections that have been flagged as 'expired' by the
 	 *  maintenance thread. These values will be used to release the retained connections in the specific
@@ -267,6 +278,7 @@ class MySQL_Session
 	bool sending_set_autocommit;
 	bool killed;
 	bool locked_on_hostgroup_and_all_variables_set;
+	bool in_later_mode;
 	//bool admin;
 	bool max_connections_reached;
 	bool client_authenticated;

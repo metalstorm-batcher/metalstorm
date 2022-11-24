@@ -118,7 +118,8 @@ void proxy_debug_func(enum debug_module module, int verbosity, int thr, const ch
 	char debugbuff[DEBUG_MSG_MAXSIZE];
 	char longdebugbuff[DEBUG_MSG_MAXSIZE*8];
 	longdebugbuff[0]=0;
-	if (GloVars.global.foreground) {
+	// if (GloVars.global.foreground) {
+	if (1) {
 		va_list ap;
 		va_start(ap, fmt);
 		vsnprintf(debugbuff, DEBUG_MSG_MAXSIZE,fmt,ap);
@@ -401,6 +402,7 @@ void init_debug_struct() {
 	GloVars.global.gdbg_lvl[PROXY_DEBUG_IPC].name=(char *)"debug_ipc";
 	GloVars.global.gdbg_lvl[PROXY_DEBUG_QUERY_CACHE].name=(char *)"debug_query_cache";
 	GloVars.global.gdbg_lvl[PROXY_DEBUG_QUERY_STATISTICS].name=(char *)"debug_query_statistics";
+	GloVars.global.gdbg_lvl[PROXY_DEBUG_METALSTORM].name=(char *)"debug_metalstorm_batcher";
 
 	for (i=0;i<PROXY_DEBUG_UNKNOWN;i++) {
 		// if this happen, the above table is not populated correctly

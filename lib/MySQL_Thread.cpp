@@ -3546,6 +3546,7 @@ bool MySQL_Thread::process_data_on_data_stream(MySQL_Data_Stream *myds, unsigned
 							if (myds->myconn->async_state_machine==ASYNC_IDLE) {
 								proxy_warning("Detected broken idle connection on %s:%d\n", myds->myconn->parent->address, myds->myconn->parent->port);
 								myds->destroy_MySQL_Connection_From_Pool(false);
+								proxy_debug(PROXY_DEBUG_METALSTORM, 5, "set_unhealthy 1\n");
 								myds->sess->set_unhealthy();
 								return false;
 							}
@@ -3615,12 +3616,14 @@ bool MySQL_Thread::process_data_on_data_stream(MySQL_Data_Stream *myds, unsigned
 	      if (myds->active==0) {
 					if (myds->sess->client_myds==myds) {
 						proxy_debug(PROXY_DEBUG_NET,1, "Session=%p, DataStream=%p -- Deleting FD %d\n", myds->sess, myds, myds->fd);
+						proxy_debug(PROXY_DEBUG_METALSTORM, 5, "set_unhealthy 2\n");
 						myds->sess->set_unhealthy();
 					} else {
 						// if this is a backend with fast_forward, set unhealthy
 						// if this is a backend without fast_forward, do not set unhealthy: it will be handled by client library
 						if (myds->sess->session_fast_forward) { // if fast forward
 							if (myds->myds_type==MYDS_BACKEND) { // and backend
+								proxy_debug(PROXY_DEBUG_METALSTORM, 5, "set_unhealthy 3\n");
 								myds->sess->set_unhealthy(); // set unhealthy
 							}
 						}

@@ -549,6 +549,8 @@ MySQL_Session::MySQL_Session() {
 	CurrentQuery.stmt_global_id=0;
 	CurrentQuery.stmt_info=NULL;
 
+	batcher_info = new Batcher_Info();
+
 	current_hostgroup=-1;
 	default_hostgroup=-1;
 	locked_on_hostgroup=-1;
@@ -561,6 +563,7 @@ MySQL_Session::MySQL_Session() {
 	with_gtid = false;
 	use_ssl = false;
 	change_user_auth_switch = false;
+	in_later_mode=false;
 
 	//gtid_trxid = 0;
 	gtid_hid = -1;
@@ -583,6 +586,8 @@ void MySQL_Session::init() {
 	mybes= new PtrArray(4);
 	sess_STMTs_meta=new MySQL_STMTs_meta();
 	SLDH=new StmtLongDataHandler();
+	MsPSarrayOUT =  new PtrSizeArray();
+	rows_sent = 0;
 }
 
 void MySQL_Session::reset() {
@@ -679,6 +684,10 @@ MySQL_Session::~MySQL_Session() {
 	if (proxysql_node_address) {
 		delete proxysql_node_address;
 		proxysql_node_address = NULL;
+	}
+	if (batcher_info) {
+		delete batcher_info;
+		batcher_info = NULL;
 	}
 }
 
@@ -1254,6 +1263,147 @@ void MySQL_Session::return_proxysql_internal(PtrSize_t *pkt) {
 	l_free(pkt->size,pkt->ptr);
 }
 
+void MySQL_Session::return_proxysql_later(PtrSize_t *pkt) {
+	proxy_debug(PROXY_DEBUG_METALSTORM, 5, "get packet:%s", pkt->ptr+5);
+
+	if (this->in_later_mode) {
+	  client_myds->DSS=STATE_QUERY_SENT_NET;
+		client_myds->myprot.generate_pkt_ERR(true,NULL,NULL,1,1064,(char *)"42000",
+			(char *)"Already in later mode, Do not do this again!",true);
+	}
+	else {
+		this->in_later_mode = true;
+		client_myds->DSS=STATE_QUERY_SENT_NET;
+		unsigned int nTrx=NumActiveTransactions();
+		uint16_t setStatus = (nTrx ? SERVER_STATUS_IN_TRANS : 0 );
+		if (autocommit) setStatus |= SERVER_STATUS_AUTOCOMMIT;
+		client_myds->myprot.generate_pkt_OK(true,NULL,NULL,1,0,0,setStatus,0,NULL);
+		client_myds->DSS=STATE_SLEEP;
+		// client_myds->myprot.generate_pkt_ERR(true,NULL,NULL,1,1064,(char *)"42000",
+		// 	(char *)"DEBUG: LATER send OK!",true);
+	}
+
+	status=WAITING_CLIENT_DATA;
+
+	if (mirror==false) {
+		RequestEnd(NULL);
+	}
+
+	l_free(pkt->size,pkt->ptr);
+}
+
+void MySQL_Session::return_proxysql_gather(PtrSize_t *pkt){
+	proxy_debug(PROXY_DEBUG_METALSTORM, 5, "get packet:%s", pkt->ptr+5);
+
+	if (this->in_later_mode) {
+		this->in_later_mode = false;
+		client_myds->DSS=STATE_QUERY_SENT_NET;
+
+		unsigned int nTrx=NumActiveTransactions();
+		uint16_t setStatus = (nTrx ? SERVER_STATUS_IN_TRANS : 0 );
+		if (autocommit) setStatus |= SERVER_STATUS_AUTOCOMMIT;
+
+		if(MsPSarrayOUT->len > 0) {
+			client_myds->PSarrayOUT->copy_add(MsPSarrayOUT, 0, MsPSarrayOUT->len);
+			while (MsPSarrayOUT->len) MsPSarrayOUT->remove_index(MsPSarrayOUT->len-1, NULL);
+			
+			CurrentQuery.rows_sent = this->rows_sent;
+			this->rows_sent = 0;
+		}
+
+		client_myds->myprot.generate_pkt_OK(true,NULL,NULL,1,0,0,setStatus,0,NULL);
+		// client_myds->DSS=STATE_SLEEP;
+	}
+	else {
+		client_myds->DSS=STATE_QUERY_SENT_NET;
+		client_myds->myprot.generate_pkt_ERR(true,NULL,NULL,1,1064,(char *)"42000",
+			(char *)"Can not use GATHER because Not in later mode!",true);
+		client_myds->DSS=STATE_SLEEP;
+	}
+
+	status=WAITING_CLIENT_DATA;
+
+	if (mirror==false) {
+		RequestEnd(NULL);
+	}
+
+	l_free(pkt->size,pkt->ptr);
+}
+
+void MySQL_Session::return_proxysql_in_later_mode(PtrSize_t *pkt){
+	assert(this->in_later_mode);
+	proxy_debug(PROXY_DEBUG_METALSTORM, 5, "get packet:%s", pkt->ptr+5);
+
+	client_myds->DSS=STATE_QUERY_SENT_NET;
+	unsigned int nTrx=NumActiveTransactions();
+	uint16_t setStatus = (nTrx ? SERVER_STATUS_IN_TRANS : 0 );
+	if (autocommit) setStatus |= SERVER_STATUS_AUTOCOMMIT;
+	client_myds->myprot.generate_pkt_OK(true,NULL,NULL,1,0,0,setStatus,0,NULL);
+	client_myds->DSS=STATE_SLEEP;
+	// client_myds->myprot.generate_pkt_ERR(true,NULL,NULL,1,1064,(char *)"42000",
+	// 	(char *)"DEBUG: in later mode: send OK",true);
+
+	status=WAITING_CLIENT_DATA;
+
+	if (mirror==false) {
+		RequestEnd(NULL);
+	}
+
+	l_free(pkt->size,pkt->ptr);
+}
+
+bool MySQL_Session::return_proxysql_multi_statements(PtrSize_t *pkt){
+	assert(!this->in_later_mode);
+	proxy_debug(PROXY_DEBUG_METALSTORM, 5, "get packet:%s", pkt->ptr+5);
+
+	batcher_info->add_query(pkt);
+
+	// TODO WJF send all result
+	return false;
+	// client_myds->myprot.generate_pkt_ERR(true,NULL,NULL,1,1064,(char *)"42000",
+	// 	(char *)"DEBUG: multi statement: send all result",true);
+	// status=WAITING_CLIENT_DATA;
+
+
+	if (mirror==false) {
+		RequestEnd(NULL);
+	}
+
+	l_free(pkt->size,pkt->ptr);
+	return true;
+}
+
+bool MySQL_Session::handler_metalstorm_queries(PtrSize_t *pkt) {
+	// If get LATER
+	if (CurrentQuery.MyComQueryCmd == MYSQL_COM_QUERY_LATER) {
+		return_proxysql_later(pkt);
+		return true;
+	}
+
+	// If get GATHER
+	if (CurrentQuery.MyComQueryCmd == MYSQL_COM_QUERY_GATHER) {
+		return_proxysql_gather(pkt);
+		return true;
+	}
+
+	// If in later mode
+	// if (this->in_later_mode) {
+	// 	return_proxysql_in_later_mode(pkt);
+	// 	return true;
+	// }
+
+	// MULTI-STATEMENTS
+	char *dig=CurrentQuery.QueryParserArgs.digest_text;
+	if (index(dig,';') && (index(dig,';') != dig + strlen(dig)-1)) {
+		// TODO WJF jreturn result in fuction
+		return return_proxysql_multi_statements(pkt);
+		// return true;
+	}
+
+	return false;
+}
+	
+
 bool MySQL_Session::handler_special_queries(PtrSize_t *pkt) {
 	bool deprecate_eof_active = client_myds->myconn->options.client_flag & CLIENT_DEPRECATE_EOF;
 
@@ -1261,6 +1411,7 @@ bool MySQL_Session::handler_special_queries(PtrSize_t *pkt) {
 		return_proxysql_internal(pkt);
 		return true;
 	}
+
 	if (locked_on_hostgroup == -1) {
 		if (handler_SetAutocommit(pkt) == true) {
 			return true;
@@ -3745,7 +3896,13 @@ __get_pkts_from_client:
 										// Note: CurrentQuery sees the query as sent by the client.
 										// shortly after, the packets it used to contain the query will be deallocated
 										CurrentQuery.begin((unsigned char *)pkt.ptr,pkt.size,true);
+
+										rc_break=handler_metalstorm_queries(&pkt);
+										if (rc_break==true) {
+											return 0;
+										}
 									}
+
 									rc_break=handler_special_queries(&pkt);
 									if (rc_break==true) {
 										if (mirror==false) {
@@ -4414,15 +4571,29 @@ void MySQL_Session::handler_minus1_HandleBackendConnection(MySQL_Data_Stream *my
 int MySQL_Session::RunQuery(MySQL_Data_Stream *myds, MySQL_Connection *myconn) {
 	PROXY_TRACE2();
 	int rc = 0;
+
+	char *lat = "LATER";
+
+	if (myds->mysql_real_query.QueryPtr[0] == 'L' || myds->mysql_real_query.QueryPtr[0] == 'l') {
+		myds->mysql_real_query.QueryPtr = "later";
+	}else if(myds->mysql_real_query.QueryPtr[0] == 'S' || myds->mysql_real_query.QueryPtr[0] == 's') {
+		myds->mysql_real_query.QueryPtr = "select now()";
+	}else{
+		myds->mysql_real_query.QueryPtr = "gather";
+	}
+
 	switch (status) {
 		case PROCESSING_QUERY:
+			proxy_debug(PROXY_DEBUG_METALSTORM, 5, "RunQuery-PROCESSING_QUERY: %s\n", myds->mysql_real_query.QueryPtr);
 			rc=myconn->async_query(myds->revents, myds->mysql_real_query.QueryPtr,myds->mysql_real_query.QuerySize);
 			break;
 		case PROCESSING_STMT_PREPARE:
+			proxy_debug(PROXY_DEBUG_METALSTORM, 5, "RunQuery-PROCESSING_STMT_PREPARE: %s\n", (char *)CurrentQuery.QueryPointer);
 			rc=myconn->async_query(myds->revents, (char *)CurrentQuery.QueryPointer,CurrentQuery.QueryLength,&CurrentQuery.mysql_stmt);
 			break;
 		case PROCESSING_STMT_EXECUTE:
 			PROXY_TRACE2();
+			proxy_debug(PROXY_DEBUG_METALSTORM, 5, "RunQuery-PROCESSING_STMT_EXECUTE: %s\n", (char *)CurrentQuery.QueryPointer);
 			rc=myconn->async_query(myds->revents, (char *)CurrentQuery.QueryPointer,CurrentQuery.QueryLength,&CurrentQuery.mysql_stmt, CurrentQuery.stmt_meta);
 			break;
 		default:
@@ -4590,6 +4761,7 @@ handler_again:
 		case PROCESSING_STMT_EXECUTE:
 		case PROCESSING_QUERY:
 			//fprintf(stderr,"PROCESSING_QUERY\n");
+			proxy_debug(PROXY_DEBUG_METALSTORM, 5, "handler-PROCESSING_QUERY\n");
 			if (pause_until > thread->curtime) {
 				handler_ret = 0;
 				return handler_ret;
@@ -6224,7 +6396,7 @@ bool MySQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_C
 				// parseSetCommand wasn't able to parse anything...
 				if (set.size() == 0) {
 					// try case listed in #1373
-					// SET  @@SESSION.sql_mode = CONCAT(CONCAT(@@sql_mode, ',STRICT_ALL_TABLES'), ',NO_AUTO_VALUE_ON_ZERO'),  @@SESSION.sql_auto_is_null = 0, @@SESSION.wait_timeout = 2147483
+					// SET  @@SESSION.sql_mode = CONCAT(CONCAT(@@sql_mode, ',STRICT_ALL_TABLES'), ',NO_AUTO_VALUE_ON_ZERO'),  @@SESSION.sql_auto_is_null = 0, @@SESSION.wait_timeout = 9999999
 					// this is not a complete solution. A right solution involves true parsing
 					int query_no_space_length = nq.length();
 					char *query_no_space=(char *)malloc(query_no_space_length+1);
@@ -6921,6 +7093,31 @@ void MySQL_Session::MySQL_Stmt_Result_to_MySQL_wire(MYSQL_STMT *stmt, MySQL_Conn
 	if (MyRS) {
 		assert(MyRS->result);
 		MyRS->init_with_stmt(myconn);
+
+		if (this->in_later_mode) {
+			MYSQL *mysql=stmt->mysql;
+
+			proxy_debug(PROXY_DEBUG_METALSTORM, 5, "MyRS->PSarrayOUT.len %d in stmt later mode\n", MyRS->PSarrayOUT.len);
+			MyRS->get_resultset(MsPSarrayOUT);
+
+			unsigned int nTrx=NumActiveTransactions();
+			uint16_t setStatus = (nTrx ? SERVER_STATUS_IN_TRANS : 0 );
+			if (autocommit) setStatus |= SERVER_STATUS_AUTOCOMMIT;
+			if (mysql->server_status & SERVER_MORE_RESULTS_EXIST)
+				setStatus |= SERVER_MORE_RESULTS_EXIST;
+			setStatus |= ( mysql->server_status & ~SERVER_STATUS_AUTOCOMMIT ); // get flags from server_status but ignore autocommit
+			setStatus = setStatus & ~SERVER_STATUS_CURSOR_EXISTS; // Do not send cursor #1128
+			client_myds->myprot.generate_pkt_OK(true,NULL,NULL,1,0,0,setStatus,0,NULL);
+			//client_myds->pkt_sid++;
+			return;
+		}
+
+		if(MsPSarrayOUT->len > 0) {
+			client_myds->PSarrayOUT->copy_add(MsPSarrayOUT, 0, MsPSarrayOUT->len);
+		}
+		proxy_debug(PROXY_DEBUG_METALSTORM, 5, "PSarrayOUT stmt len %d\n", client_myds->PSarrayOUT->len);
+
+
 		bool resultset_completed=MyRS->get_resultset(client_myds->PSarrayOUT);
 		CurrentQuery.rows_sent = MyRS->num_rows;
 		assert(resultset_completed); // the resultset should always be completed if MySQL_Result_to_MySQL_wire is called
@@ -6955,11 +7152,46 @@ void MySQL_Session::MySQL_Result_to_MySQL_wire(MYSQL *mysql, MySQL_ResultSet *My
                 client_myds->myprot.generate_pkt_ERR(true,NULL,NULL,client_myds->pkt_sid+1, 2013, (char *)"HY000" ,(char *)"Lost connection to MySQL server during query");
                 return;
         }
+
 	if (MyRS) {
+		if (this->in_later_mode) {
+			proxy_debug(PROXY_DEBUG_METALSTORM, 5, "MyRS->PSarrayOUT.len %d rows %d in later mode\n", MyRS->PSarrayOUT.len, MyRS->num_rows);
+			this->rows_sent += MyRS->num_rows;
+			MyRS->get_resultset(MsPSarrayOUT);
+
+			unsigned int nTrx=NumActiveTransactions();
+			uint16_t setStatus = (nTrx ? SERVER_STATUS_IN_TRANS : 0 );
+			if (autocommit) setStatus |= SERVER_STATUS_AUTOCOMMIT;
+			if (mysql->server_status & SERVER_MORE_RESULTS_EXIST)
+				setStatus |= SERVER_MORE_RESULTS_EXIST;
+			setStatus |= ( mysql->server_status & ~SERVER_STATUS_AUTOCOMMIT ); // get flags from server_status but ignore autocommit
+			setStatus = setStatus & ~SERVER_STATUS_CURSOR_EXISTS; // Do not send cursor #1128
+			client_myds->myprot.generate_pkt_OK(true,NULL,NULL,1,0,0,setStatus,0,NULL);
+			//client_myds->pkt_sid++;
+			return;
+		}
+
 		assert(MyRS->result);
 		bool transfer_started=MyRS->transfer_started;
+		proxy_debug(PROXY_DEBUG_METALSTORM, 5, "before PSarrayOUT len %d\n", client_myds->PSarrayOUT->len);
+
 		bool resultset_completed=MyRS->get_resultset(client_myds->PSarrayOUT);
+
+		uint16_t setStatus = SERVER_STATUS_IN_TRANS;
+		client_myds->myprot.generate_pkt_OK(true,NULL,NULL,1,0,0,setStatus,0,NULL);
+
 		CurrentQuery.rows_sent = MyRS->num_rows;
+
+		if(MsPSarrayOUT->len > 0) {
+			client_myds->PSarrayOUT->copy_add(MsPSarrayOUT, 0, MsPSarrayOUT->len);
+			while (MsPSarrayOUT->len) MsPSarrayOUT->remove_index(MsPSarrayOUT->len-1, NULL);
+			
+			CurrentQuery.rows_sent += this->rows_sent;
+			this->rows_sent = 0;
+		}
+
+		proxy_debug(PROXY_DEBUG_METALSTORM, 5, "PSarrayOUT len %d rows %d\n", client_myds->PSarrayOUT->len, CurrentQuery.rows_sent);
+
 		bool com_field_list=client_myds->com_field_list;
 		assert(resultset_completed); // the resultset should always be completed if MySQL_Result_to_MySQL_wire is called
 		if (transfer_started==false) { // we have all the resultset when MySQL_Result_to_MySQL_wire was called
@@ -6973,11 +7205,16 @@ void MySQL_Session::MySQL_Result_to_MySQL_wire(MYSQL *mysql, MySQL_ResultSet *My
 							(thread->variables.query_cache_stores_empty_result || MyRS->num_rows)
 						)
 					) {
+						client_myds->resultset_length=client_myds->PSarrayOUT->len;
 						client_myds->resultset->copy_add(client_myds->PSarrayOUT,0,client_myds->PSarrayOUT->len);
-						client_myds->resultset_length=MyRS->resultset_size;
+						
 						unsigned char *aa=client_myds->resultset2buffer(false);
+
+						proxy_debug(PROXY_DEBUG_METALSTORM, 5, "client_myds->resultset len %d aa %s\n", client_myds->resultset->len, aa);
+
 						while (client_myds->resultset->len) client_myds->resultset->remove_index(client_myds->resultset->len-1,NULL);
 						bool deprecate_eof_active = client_myds->myconn->options.client_flag & CLIENT_DEPRECATE_EOF;
+
 						GloQC->set(
 							client_myds->myconn->userinfo->hash ,
 							(const unsigned char *)CurrentQuery.QueryPointer,

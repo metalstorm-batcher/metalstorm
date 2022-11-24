@@ -128,6 +128,7 @@ enum debug_module {
 	PROXY_DEBUG_IPC,
 	PROXY_DEBUG_QUERY_CACHE,
 	PROXY_DEBUG_QUERY_STATISTICS,
+	PROXY_DEBUG_METALSTORM,
 	PROXY_DEBUG_UNKNOWN // this module doesn't exist. It is used only to define the last possible module
 };
 
@@ -236,6 +237,7 @@ enum session_status {
 	SETTING_MULTIPLE_VARIABLES,
 	SETTING_SET_NAMES,
 	SHOW_WARNINGS,
+	PROCESSING_QUERY_LATER,
 	session_status___NONE // special marker
 };
 
@@ -411,6 +413,8 @@ enum MYSQL_COM_QUERY_command {
 	MYSQL_COM_QUERY_UPDATE,
 	MYSQL_COM_QUERY_USE,
 	MYSQL_COM_QUERY_SHOW,
+	MYSQL_COM_QUERY_LATER,
+	MYSQL_COM_QUERY_GATHER,
 	MYSQL_COM_QUERY_UNKNOWN,
 	MYSQL_COM_QUERY__UNINITIALIZED,
 	MYSQL_COM_QUERY___NONE // Special marker.
@@ -511,6 +515,10 @@ class Query_Processor_Output;
 class MySrvC;
 class Web_Interface_plugin;
 class ProxySQL_Node_Address;
+// MetalStorm class
+class Query_Pack;
+class Batcher_Info;
+class Batcher;
 #endif /* PROXYSQL_CLASSES */
 //#endif /* __cplusplus */
 

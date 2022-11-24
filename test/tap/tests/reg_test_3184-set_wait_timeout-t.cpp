@@ -46,32 +46,32 @@ void parse_result_json_column(MYSQL_RES *result, json& j) {
  *  by ProxySQL to be ignored.
  */
 std::vector<std::string> valids_set_wait_timeout {
-	"SET @@wait_timeout = 2147483",
-	"SET @@wait_timeout=2147483",
-	"SET @@SESSION.wait_timeout = 2147483",
-	"SET @@SESSION.wait_timeout=2147483",
-	"SET wait_timeout = 2147483",
-	"SET wait_timeout=2147483",
-	"SET SESSION wait_timeout = 2147483",
-	"SET SESSION wait_timeout=2147483",
+	"SET @@wait_timeout = 9999999",
+	"SET @@wait_timeout=9999999",
+	"SET @@SESSION.wait_timeout = 9999999",
+	"SET @@SESSION.wait_timeout=9999999",
+	"SET wait_timeout = 9999999",
+	"SET wait_timeout=9999999",
+	"SET SESSION wait_timeout = 9999999",
+	"SET SESSION wait_timeout=9999999",
 
-	"SET @@net_read_timeout = 2147483",
-	"SET @@net_read_timeout=2147483",
-	"SET @@SESSION.net_read_timeout = 2147483",
-	"SET @@SESSION.net_read_timeout=2147483",
-	"SET net_read_timeout = 2147483",
-	"SET net_read_timeout=2147483",
-	"SET SESSION net_read_timeout = 2147483",
-	"SET SESSION net_read_timeout=2147483",
+	"SET @@net_read_timeout = 9999999",
+	"SET @@net_read_timeout=9999999",
+	"SET @@SESSION.net_read_timeout = 9999999",
+	"SET @@SESSION.net_read_timeout=9999999",
+	"SET net_read_timeout = 9999999",
+	"SET net_read_timeout=9999999",
+	"SET SESSION net_read_timeout = 9999999",
+	"SET SESSION net_read_timeout=9999999",
 
-	"SET @@interactive_timeout = 2147483",
-	"SET @@interactive_timeout=2147483",
-	"SET @@SESSION.interactive_timeout = 2147483",
-	"SET @@SESSION.interactive_timeout=2147483",
-	"SET interactive_timeout = 2147483",
-	"SET interactive_timeout=2147483",
-	"SET SESSION interactive_timeout = 2147483",
-	"SET SESSION interactive_timeout=2147483"
+	"SET @@interactive_timeout = 9999999",
+	"SET @@interactive_timeout=9999999",
+	"SET @@SESSION.interactive_timeout = 9999999",
+	"SET @@SESSION.interactive_timeout=9999999",
+	"SET interactive_timeout = 9999999",
+	"SET interactive_timeout=9999999",
+	"SET SESSION interactive_timeout = 9999999",
+	"SET SESSION interactive_timeout=9999999"
 
 };
 

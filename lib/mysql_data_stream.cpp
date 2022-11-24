@@ -281,6 +281,7 @@ MySQL_Data_Stream::MySQL_Data_Stream() {
 	resultset=NULL;
 	queue_init(queueIN,QUEUE_T_DEFAULT_SIZE);
 	queue_init(queueOUT,QUEUE_T_DEFAULT_SIZE);
+	queue_init(queueMS,QUEUE_T_DEFAULT_SIZE);
 	mybe=NULL;
 	active=1;
 	mypolls=NULL;
@@ -453,6 +454,8 @@ void MySQL_Data_Stream::init(enum MySQL_DS_type _type, MySQL_Session *_sess, int
 // TODO: should check the status of the data stream, and identify if it is safe to reconnect or if the session should be destroyed
 void MySQL_Data_Stream::shut_soft() {
 	proxy_debug(PROXY_DEBUG_NET, 4, "Shutdown soft fd=%d. Session=%p, DataStream=%p\n", fd, sess, this);
+	proxy_debug(PROXY_DEBUG_METALSTORM, 5, "shut_soft\n");
+
 	active=0;
 	set_net_failure();
 	//if (sess) sess->net_failure=1;
@@ -481,6 +484,8 @@ void MySQL_Data_Stream::check_data_flow() {
 	if ( (PSarrayIN->len || queue_data(queueIN) ) && ( PSarrayOUT->len || queue_data(queueOUT) ) ){
 		// there is data at both sides of the data stream: this is considered a fatal error
 		proxy_error("Session=%p, DataStream=%p -- Data at both ends of a MySQL data stream: IN <%d bytes %d packets> , OUT <%d bytes %d packets>\n", sess, this, PSarrayIN->len , queue_data(queueIN) , PSarrayOUT->len , queue_data(queueOUT));
+		
+		proxy_debug(PROXY_DEBUG_METALSTORM, 5, "shut_soft 1\n");
 		shut_soft();
 	}
 	if ((myds_type==MYDS_BACKEND) && myconn && (myconn->fd==0) && (revents & POLLOUT)) {
@@ -494,6 +499,7 @@ void MySQL_Data_Stream::check_data_flow() {
 		} else {
 			errno=error;
 			perror("check_data_flow");
+			proxy_debug(PROXY_DEBUG_METALSTORM, 5, "shut_soft 2\n");
 			shut_soft();
 		}
 	}
@@ -505,6 +511,7 @@ int MySQL_Data_Stream::read_from_net() {
 	}
 	if ((revents & POLLIN)==0) return 0;
 	if (revents & POLLHUP) {
+		proxy_debug(PROXY_DEBUG_METALSTORM, 5, "shut_soft 3\n");
 		shut_soft();
 		return -1;
 	}
@@ -569,6 +576,7 @@ int MySQL_Data_Stream::read_from_net() {
 				proxy_debug(PROXY_DEBUG_NET, 5, "Session=%p: write %d bytes into BIO %p, len=%d\n", sess, n2, rbio_ssl, len);
 				//proxy_info("BIO_write with len = %d and %d bytes\n", len , n2);
 				if (n2 <= 0) {
+					proxy_debug(PROXY_DEBUG_METALSTORM, 5, "shut_soft 4\n");
 					shut_soft();
 					return -1;
 				}
@@ -578,6 +586,7 @@ int MySQL_Data_Stream::read_from_net() {
 					//proxy_info("SSL_is_init_finished NOT completed\n");
 					if (do_ssl_handshake() == SSLSTATUS_FAIL) {
 						//proxy_info("SSL_is_init_finished failed!!\n");
+						proxy_debug(PROXY_DEBUG_METALSTORM, 5, "shut_soft 5\n");
 						shut_soft();
 						return -1;
 					}
@@ -612,12 +621,14 @@ int MySQL_Data_Stream::read_from_net() {
 					if (n2 > 0) {
           				queue_encrypted_bytes(buf2, n2);
 					} else if (!BIO_should_retry(wbio_ssl)) {
+						proxy_debug(PROXY_DEBUG_METALSTORM, 5, "shut_soft 6\n");
 						shut_soft();
 						return -1;
 					}
 				} while (n2>0);
 			}
 			if (status == SSLSTATUS_FAIL) {
+				proxy_debug(PROXY_DEBUG_METALSTORM, 5, "shut_soft 7\n");
 				shut_soft();
 				return -1;
 			}
@@ -633,15 +644,20 @@ int MySQL_Data_Stream::read_from_net() {
 	if (r < 1) {
 		if (encrypted==false) {
 			int myds_errno=errno;
-			if (r==0 || (r==-1 && myds_errno != EINTR && myds_errno != EAGAIN)) {
+			if (0 && r==0 || (r==-1 && myds_errno != EINTR && myds_errno != EAGAIN)) {
+				proxy_debug(PROXY_DEBUG_METALSTORM, 5, "shut_soft 8\n");
 				shut_soft();
 			}
 		} else {
 			int ssl_ret=SSL_get_error(ssl, r);
-			if (ssl_ret!=SSL_ERROR_WANT_READ && ssl_ret!=SSL_ERROR_WANT_WRITE) shut_soft();
+			if (ssl_ret!=SSL_ERROR_WANT_READ && ssl_ret!=SSL_ERROR_WANT_WRITE) {
+				proxy_debug(PROXY_DEBUG_METALSTORM, 5, "shut_soft 9\n");
+				shut_soft();
+			}
 			if (r==0 && revents==1) {
 				// revents returns 1 , but recv() returns 0 , so there is no data.
 				// Therefore the socket is already closed
+				proxy_debug(PROXY_DEBUG_METALSTORM, 5, "shut_soft 10\n");
 				shut_soft();
 			}
 		}
@@ -685,6 +701,7 @@ int MySQL_Data_Stream::write_to_net() {
 				}
         		else if (!BIO_should_retry(wbio_ssl)) {
 					//proxy_info("BIO_should_retry failed\n");
+					proxy_debug(PROXY_DEBUG_METALSTORM, 5, "shut_soft 11\n");
 					shut_soft();
 					return -1;
 				}
@@ -709,6 +726,7 @@ int MySQL_Data_Stream::write_to_net() {
   			} else {
 				int myds_errno=errno;
 				if (n==0 || (n==-1 && myds_errno != EINTR && myds_errno != EAGAIN)) {
+					proxy_debug(PROXY_DEBUG_METALSTORM, 5, "shut_soft 12\n");
 					shut_soft();
 					return 0;
 				} else {
@@ -731,11 +749,15 @@ int MySQL_Data_Stream::write_to_net() {
 		if (encrypted==false)	{
 			if ((poll_fds_idx < 0) || (mypolls->fds[poll_fds_idx].revents & POLLOUT)) { // in write_to_net_poll() we has remove this safety
                                                           // so we enforce it here
+				proxy_debug(PROXY_DEBUG_METALSTORM, 5, "shut_soft 13\n");
 				shut_soft();
 			}
 		} else {
 			int ssl_ret=SSL_get_error(ssl, bytes_io);
-			if (ssl_ret!=SSL_ERROR_WANT_READ && ssl_ret!=SSL_ERROR_WANT_WRITE) shut_soft();
+			if (ssl_ret!=SSL_ERROR_WANT_READ && ssl_ret!=SSL_ERROR_WANT_WRITE) {
+				proxy_debug(PROXY_DEBUG_METALSTORM, 5, "shut_soft 14\n");
+				shut_soft();
+			}
 		}
 	} else {
 		queue_r(queueOUT, bytes_io);
@@ -787,6 +809,7 @@ void MySQL_Data_Stream::set_pollout() {
 					//proxy_info("SSL_is_init_finished NOT completed\n");
 					if (do_ssl_handshake() == SSLSTATUS_FAIL) {
 						//proxy_info("SSL_is_init_finished failed!!\n");
+						proxy_debug(PROXY_DEBUG_METALSTORM, 5, "shut_soft 15\n");
 						shut_soft();
 						return;
 					}
@@ -824,6 +847,7 @@ int MySQL_Data_Stream::write_to_net_poll() {
 			//proxy_info("SSL_is_init_finished completed: NO!\n");
 					if (do_ssl_handshake() == SSLSTATUS_FAIL) {
 						//proxy_info("SSL_is_init_finished failed!!\n");
+						proxy_debug(PROXY_DEBUG_METALSTORM, 5, "shut_soft 16\n");
 						shut_soft();
 						return -1;
 					}
@@ -858,6 +882,7 @@ int MySQL_Data_Stream::write_to_net_poll() {
   			} else {
 				int myds_errno=errno;
 				if (n==0 || (n==-1 && myds_errno != EINTR && myds_errno != EAGAIN)) {
+					proxy_debug(PROXY_DEBUG_METALSTORM, 5, "shut_soft 17\n");
 					shut_soft();
 					return 0;
 				} else {
@@ -1047,6 +1072,7 @@ int MySQL_Data_Stream::buffer2array() {
 					}
 					if (sanity_check == false) {
 						proxy_error("Unable to uncompress a compressed packet\n");
+						proxy_debug(PROXY_DEBUG_METALSTORM, 5, "shut_soft 18\n");
 						shut_soft();
 						return ret;
 					}
@@ -1206,81 +1232,69 @@ void MySQL_Data_Stream::generate_compressed_packet() {
 
 
 int MySQL_Data_Stream::array2buffer() {
-	int ret=0;
+	int ret = 0;
+	int sent_size = 0;
 	unsigned int idx=0;
-	bool cont=true;
+
 	if (sess) {
 		if (sess->mirror==true) { // if this is a mirror session, just empty it
 			idx=PSarrayOUT->len;
 			goto __exit_array2buffer;
 		}
 	}
-	while (cont) {
-		//VALGRIND_DISABLE_ERROR_REPORTING;
-		if (queue_available(queueOUT)==0) {
-			goto __exit_array2buffer;
-		}
-		if (queueOUT.partial==0) { // read a new packet
-			if (PSarrayOUT->len-idx) {
-				proxy_debug(PROXY_DEBUG_PKT_ARRAY, 5, "Session=%p . DataStream: %p -- Removing a packet from array\n", sess, this);
-				if (queueOUT.pkt.ptr) {
-					l_free(queueOUT.pkt.size,queueOUT.pkt.ptr);
-					queueOUT.pkt.ptr=NULL;
+	
+	//VALGRIND_DISABLE_ERROR_REPORTING;
+	if (queue_available(queueOUT)==0) {
+		goto __exit_array2buffer;
+	}
+
+	// metalstorm
+	if (queueOUT.pkt.ptr) {
+		l_free(queueOUT.pkt.size,queueOUT.pkt.ptr);
+		queueOUT.pkt.ptr=NULL;
+	}
+
+	for(int i = 0; i < PSarrayOUT->len; ++i) {
+		memcpy(queue_w_ptr(queueMS) + sent_size, PSarrayOUT->index(i)->ptr, PSarrayOUT->index(i)->size);
+		// memcpy(queue_w_ptr(queueOUT), (unsigned char *)PSarrayOUT->index(i)->ptr, PSarrayOUT->index(i)->size);
+
+		if (DSS==STATE_CLIENT_AUTH_OK) {
+			DSS=STATE_SLEEP;
+			// enable compression
+			if (myconn->options.server_capabilities & CLIENT_COMPRESS) {
+				if (myconn->options.compression_min_length) {
+					myconn->set_status(true, STATUS_MYSQL_CONNECTION_COMPRESSION);
 				}
-		//VALGRIND_ENABLE_ERROR_REPORTING;
-				if (myconn->get_status(STATUS_MYSQL_CONNECTION_COMPRESSION)==true) {
-					proxy_debug(PROXY_DEBUG_PKT_ARRAY, 5, "Session=%p . DataStream: %p -- Compression enabled\n", sess, this);
-					generate_compressed_packet();	// it is copied directly into queueOUT.pkt					
-				} else {
-		//VALGRIND_DISABLE_ERROR_REPORTING;
-					memcpy(&queueOUT.pkt,PSarrayOUT->index(idx), sizeof(PtrSize_t));
-					idx++;
-		//VALGRIND_ENABLE_ERROR_REPORTING;
-					// this is a special case, needed because compression is enabled *after* the first OK
-					if (DSS==STATE_CLIENT_AUTH_OK) {
-						DSS=STATE_SLEEP;
-						// enable compression
-						if (myconn->options.server_capabilities & CLIENT_COMPRESS) {
-							if (myconn->options.compression_min_length) {
-								myconn->set_status(true, STATUS_MYSQL_CONNECTION_COMPRESSION);
-							}
-						} else {
-							//explicitly disable compression
-							myconn->options.compression_min_length=0;
-							myconn->set_status(false, STATUS_MYSQL_CONNECTION_COMPRESSION);
-						}
-					}
-				}
-#ifdef DEBUG
-				{ __dump_pkt(__func__,(unsigned char *)queueOUT.pkt.ptr,queueOUT.pkt.size); }
-#endif
 			} else {
-				cont=false;
-				continue;
+				//explicitly disable compression
+				myconn->options.compression_min_length=0;
+				myconn->set_status(false, STATUS_MYSQL_CONNECTION_COMPRESSION);
 			}
 		}
-		int b= ( queue_available(queueOUT) > (queueOUT.pkt.size - queueOUT.partial) ? (queueOUT.pkt.size - queueOUT.partial) : queue_available(queueOUT) );
-		//VALGRIND_DISABLE_ERROR_REPORTING;
-		memcpy(queue_w_ptr(queueOUT), (unsigned char *)queueOUT.pkt.ptr + queueOUT.partial, b);
-		//VALGRIND_ENABLE_ERROR_REPORTING;
-		queue_w(queueOUT,b);
-		proxy_debug(PROXY_DEBUG_PKT_ARRAY, 5, "Session=%p . DataStream: %p -- Copied %d bytes into send buffer\n", sess, this, b);
-		queueOUT.partial+=b;
-		ret=b;
-		if (queueOUT.partial==queueOUT.pkt.size) {
-			if (queueOUT.pkt.ptr) {
-				l_free(queueOUT.pkt.size,queueOUT.pkt.ptr);
-				queueOUT.pkt.ptr=NULL;
-			}
-			proxy_debug(PROXY_DEBUG_PKT_ARRAY, 5, "Session=%p . DataStream: %p -- Packet completely written into send buffer\n", sess, this);
-			queueOUT.partial=0;
-			pkts_sent+=1;
-		}
+
+		sent_size += PSarrayOUT->index(i)->size;
+		// queue_w(queueOUT, PSarrayOUT->index(i)->size);
 	}
+	memcpy(queue_w_ptr(queueOUT), queue_r_ptr(queueMS), sent_size);
+
+	queue_w(queueOUT, sent_size);
+	pkts_sent += 1;
+
+	// end metalstorm
+	// TODO queue_available(queueOUT) may less than buf, so we need partial
+	// TODO generate_compressed_packet
+
+	// queue_w(queueOUT, sent_size);
+	proxy_debug(PROXY_DEBUG_PKT_ARRAY, 5, "Session=%p . DataStream: %p -- Copied %d bytes into send buffer\n", sess, this, sent_size);
+	
+	proxy_debug(PROXY_DEBUG_PKT_ARRAY, 5, "Session=%p . DataStream: %p -- Packet completely written into send buffer\n", sess, this);
+
+
 __exit_array2buffer:
-	if (idx) {
-		PSarrayOUT->remove_index_range(0,idx);
-	}
+	PSarrayOUT->remove_index_range(0, PSarrayOUT->len);
+
+	ret = sent_size;
+
 	return ret;
 }
 
@@ -1290,6 +1304,8 @@ unsigned char * MySQL_Data_Stream::resultset2buffer(bool del) {
 	unsigned char *mybuff=(unsigned char *)l_alloc(resultset_length);
 	PtrSize_t *ps;
 	for (i=0;i<resultset->len;i++) {
+		proxy_debug(PROXY_DEBUG_METALSTORM, 5, "result %d, size %d\n", i, resultset->index(i)->size);
+
 		ps=resultset->index(i);
 		memcpy(mybuff+l,ps->ptr,ps->size);
 		if (del) l_free(ps->size,ps->ptr);
