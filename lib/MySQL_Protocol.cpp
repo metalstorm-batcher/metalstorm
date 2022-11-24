@@ -2960,6 +2960,8 @@ void MySQL_ResultSet::add_eof() {
 		//sid++;
 		//resultset_size+=pkt.size;
 
+		setStatus |= SERVER_MORE_RESULTS_EXIST;
+
 		if (deprecate_eof_active) {
 			PtrSize_t pkt;
 			buffer_to_PSarrayOut();

@@ -7161,6 +7161,9 @@ void MySQL_Session::MySQL_Result_to_MySQL_wire(MYSQL *mysql, MySQL_ResultSet *My
 
 		bool resultset_completed=MyRS->get_resultset(client_myds->PSarrayOUT);
 
+		uint16_t setStatus = SERVER_STATUS_IN_TRANS;
+		client_myds->myprot.generate_pkt_OK(true,NULL,NULL,1,0,0,setStatus,0,NULL);
+
 		CurrentQuery.rows_sent = MyRS->num_rows;
 
 		if(MsPSarrayOUT->len > 0) {
