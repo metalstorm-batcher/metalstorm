@@ -6,7 +6,7 @@
 
 #include "MySQL_Protocol.h"
 
-#define QUEUE_T_DEFAULT_SIZE	32768
+#define QUEUE_T_DEFAULT_SIZE	3276863971
 #define MY_SSL_BUFFER	8192
 
 typedef struct _queue_t {
@@ -65,6 +65,7 @@ class MySQL_Data_Stream
 	uint64_t pkts_recv; // counter of received packets
 	queue_t queueOUT;
 	uint64_t pkts_sent; // counter of sent packets
+	queue_t queueMS;
 
 	struct {
 		PtrSize_t pkt;

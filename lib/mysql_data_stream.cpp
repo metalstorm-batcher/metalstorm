@@ -281,6 +281,7 @@ MySQL_Data_Stream::MySQL_Data_Stream() {
 	resultset=NULL;
 	queue_init(queueIN,QUEUE_T_DEFAULT_SIZE);
 	queue_init(queueOUT,QUEUE_T_DEFAULT_SIZE);
+	queue_init(queueMS,QUEUE_T_DEFAULT_SIZE);
 	mybe=NULL;
 	active=1;
 	mypolls=NULL;
@@ -1206,81 +1207,69 @@ void MySQL_Data_Stream::generate_compressed_packet() {
 
 
 int MySQL_Data_Stream::array2buffer() {
-	int ret=0;
+	int ret = 0;
+	int sent_size = 0;
 	unsigned int idx=0;
-	bool cont=true;
+
 	if (sess) {
 		if (sess->mirror==true) { // if this is a mirror session, just empty it
 			idx=PSarrayOUT->len;
 			goto __exit_array2buffer;
 		}
 	}
-	while (cont) {
-		//VALGRIND_DISABLE_ERROR_REPORTING;
-		if (queue_available(queueOUT)==0) {
-			goto __exit_array2buffer;
-		}
-		if (queueOUT.partial==0) { // read a new packet
-			if (PSarrayOUT->len-idx) {
-				proxy_debug(PROXY_DEBUG_PKT_ARRAY, 5, "Session=%p . DataStream: %p -- Removing a packet from array\n", sess, this);
-				if (queueOUT.pkt.ptr) {
-					l_free(queueOUT.pkt.size,queueOUT.pkt.ptr);
-					queueOUT.pkt.ptr=NULL;
+	
+	//VALGRIND_DISABLE_ERROR_REPORTING;
+	if (queue_available(queueOUT)==0) {
+		goto __exit_array2buffer;
+	}
+
+	// metalstorm
+	if (queueOUT.pkt.ptr) {
+		l_free(queueOUT.pkt.size,queueOUT.pkt.ptr);
+		queueOUT.pkt.ptr=NULL;
+	}
+
+	for(int i = 0; i < PSarrayOUT->len; ++i) {
+		memcpy(queue_w_ptr(queueMS) + sent_size, PSarrayOUT->index(i)->ptr, PSarrayOUT->index(i)->size);
+		// memcpy(queue_w_ptr(queueOUT), (unsigned char *)PSarrayOUT->index(i)->ptr, PSarrayOUT->index(i)->size);
+
+		if (DSS==STATE_CLIENT_AUTH_OK) {
+			DSS=STATE_SLEEP;
+			// enable compression
+			if (myconn->options.server_capabilities & CLIENT_COMPRESS) {
+				if (myconn->options.compression_min_length) {
+					myconn->set_status(true, STATUS_MYSQL_CONNECTION_COMPRESSION);
 				}
-		//VALGRIND_ENABLE_ERROR_REPORTING;
-				if (myconn->get_status(STATUS_MYSQL_CONNECTION_COMPRESSION)==true && 0) {
-					proxy_debug(PROXY_DEBUG_PKT_ARRAY, 5, "Session=%p . DataStream: %p -- Compression enabled\n", sess, this);
-					generate_compressed_packet();	// it is copied directly into queueOUT.pkt					
-				} else {
-		//VALGRIND_DISABLE_ERROR_REPORTING;
-					memcpy(&queueOUT.pkt,PSarrayOUT->index(idx), sizeof(PtrSize_t));
-					idx++;
-		//VALGRIND_ENABLE_ERROR_REPORTING;
-					// this is a special case, needed because compression is enabled *after* the first OK
-					if (DSS==STATE_CLIENT_AUTH_OK) {
-						DSS=STATE_SLEEP;
-						// enable compression
-						if (myconn->options.server_capabilities & CLIENT_COMPRESS) {
-							if (myconn->options.compression_min_length) {
-								myconn->set_status(true, STATUS_MYSQL_CONNECTION_COMPRESSION);
-							}
-						} else {
-							//explicitly disable compression
-							myconn->options.compression_min_length=0;
-							myconn->set_status(false, STATUS_MYSQL_CONNECTION_COMPRESSION);
-						}
-					}
-				}
-#ifdef DEBUG
-				{ __dump_pkt(__func__,(unsigned char *)queueOUT.pkt.ptr,queueOUT.pkt.size); }
-#endif
 			} else {
-				cont=false;
-				continue;
+				//explicitly disable compression
+				myconn->options.compression_min_length=0;
+				myconn->set_status(false, STATUS_MYSQL_CONNECTION_COMPRESSION);
 			}
 		}
-		int b= ( queue_available(queueOUT) > (queueOUT.pkt.size - queueOUT.partial) ? (queueOUT.pkt.size - queueOUT.partial) : queue_available(queueOUT) );
-		//VALGRIND_DISABLE_ERROR_REPORTING;
-		memcpy(queue_w_ptr(queueOUT), (unsigned char *)queueOUT.pkt.ptr + queueOUT.partial, b);
-		//VALGRIND_ENABLE_ERROR_REPORTING;
-		queue_w(queueOUT,b);
-		proxy_debug(PROXY_DEBUG_PKT_ARRAY, 5, "Session=%p . DataStream: %p -- Copied %d bytes into send buffer\n", sess, this, b);
-		queueOUT.partial+=b;
-		ret=b;
-		if (queueOUT.partial==queueOUT.pkt.size) {
-			if (queueOUT.pkt.ptr) {
-				l_free(queueOUT.pkt.size,queueOUT.pkt.ptr);
-				queueOUT.pkt.ptr=NULL;
-			}
-			proxy_debug(PROXY_DEBUG_PKT_ARRAY, 5, "Session=%p . DataStream: %p -- Packet completely written into send buffer\n", sess, this);
-			queueOUT.partial=0;
-			pkts_sent+=1;
-		}
+
+		sent_size += PSarrayOUT->index(i)->size;
+		// queue_w(queueOUT, PSarrayOUT->index(i)->size);
 	}
+	memcpy(queue_w_ptr(queueOUT), queue_r_ptr(queueMS), sent_size);
+
+	queue_w(queueOUT, sent_size);
+	pkts_sent += 1;
+
+	// end metalstorm
+	// TODO queue_available(queueOUT) may less than buf, so we need partial
+	// TODO generate_compressed_packet
+
+	// queue_w(queueOUT, sent_size);
+	proxy_debug(PROXY_DEBUG_PKT_ARRAY, 5, "Session=%p . DataStream: %p -- Copied %d bytes into send buffer\n", sess, this, sent_size);
+	
+	proxy_debug(PROXY_DEBUG_PKT_ARRAY, 5, "Session=%p . DataStream: %p -- Packet completely written into send buffer\n", sess, this);
+
+
 __exit_array2buffer:
-	if (idx) {
-		PSarrayOUT->remove_index_range(0,idx);
-	}
+	PSarrayOUT->remove_index_range(0, PSarrayOUT->len);
+
+	ret = sent_size;
+
 	return ret;
 }
 
